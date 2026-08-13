@@ -4,6 +4,7 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.database import get_db
 from app.models.orm_models import User
 from app.models.schemas import UserLogin, UserOut, UserRegister
@@ -20,7 +21,7 @@ def _set_auth_cookie(response: Response, token: str) -> None:
         value=token,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=settings.cookie_secure,
         max_age=60 * 60 * 24 * 7,
         path="/",
     )
