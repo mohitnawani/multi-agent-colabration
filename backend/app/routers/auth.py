@@ -10,7 +10,7 @@ from app.models.orm_models import User
 from app.models.schemas import UserLogin, UserOut, UserRegister
 from app.services.auth.dependencies import COOKIE_NAME, get_current_user
 from app.services.auth.redis_session import blacklist_token
-from app.services.auth.security import create_access_token, hash_password, verify_password
+from app.services.auth.security import create_access_token, decode_access_token, hash_password, verify_password
 
 router = APIRouter()
 
@@ -67,15 +67,12 @@ def logout(request: Request, response: Response):
 
     if token:
         try:
-            payload = jwt.decode(
-                token,
-                "unused",
-                algorithms=[],
-                options={"verify_signature": False, "verify_exp": False},
-            )
-            ttl = max(1, int(payload.get("exp", 0)) - int(datetime.now(timezone.utc).timestamp()))
-            blacklist_token(payload["jti"], ttl)
-        except Exception:
+            payload = decode_access_token(token)
+            jti = payload.get("jti")
+            if jti:
+                ttl = max(1, int(payload["exp"]) - int(datetime.now(timezone.utc).timestamp()))
+                blacklist_token(jti, ttl)
+        except jwt.PyJWTError:
             pass
 
     response.delete_cookie(COOKIE_NAME, path="/")
