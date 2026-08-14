@@ -1,30 +1,96 @@
 """Worker agent node builder — turns an Agent config into a LangGraph node.
 
-A closure factory: each call captures one agent's config (name, system
-prompt, model, temperature) and returns a node function that reads the
-shared CollaborationState, calls Gemini, and writes its submission back
-under its own key in agent_outputs.
+Each worker is a REAL agent (Assignment 3.1/3.4) using the classic
+ReAct tool loop drawn as GRAPH NODES:
+
+    worker_X  --(tool_calls?)-->  tools_X  --(tool results)-->  worker_X  --(final)-->
+
+1. Fresh visit: the worker writes its assignment (HumanMessage) into agent_chat
+2. Calls the model: if it decides on tool calls -> routes to tools_X
+3. tools_X (a ToolNode) executes them and appends ToolMessages
+4. Back in worker_X, the model sees the results and answers
+5. Final answer -> submission into agent_outputs, subtask marked done, back to routing
+
+Only the tools listed in the agent's `tools` config are bound — specialization.
 """
+from __future__ import annotations
+
 from datetime import datetime, timezone
 
+from langchain_core.messages import HumanMessage, ToolMessage
+from langgraph.prebuilt import ToolNode
+
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import get_chat_model
-from app.services.langgraph.state import CollaborationState
+from app.services.langgraph.llm_client import get_chat_model, invoke_with_retry
+from app.services.langgraph.state import CHAT_RESET, CollaborationState, log_change
+from app.services.tools.research_tools import get_tools
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def build_worker_node(agent: Agent):
-    model = get_chat_model(agent.llm_model, agent.temperature)
+def _flatten_content(content) -> str:
+    """Gemini 2.5 can return content as [{'type':'text','text':...}] blocks — flatten to str."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    return str(content)
+
+
+def _subtask_for(state: CollaborationState, agent_name: str) -> dict | None:
+    """Find this agent's next pending subtask in the shared plan."""
+    for s in state["subtasks"]:
+        if s["agent"] == agent_name and s.get("status") == "pending":
+            return s
+    return None
+
+
+def _returning_from_tools(state: CollaborationState) -> bool:
+    """True if the last agent_chat message is a tool result (mid-loop visit)."""
+    chat = state["agent_chat"]
+    return bool(chat) and isinstance(chat[-1], ToolMessage)
+
+
+def build_worker_node(agent: Agent, tools_node_name: str):
+    """Closure factory: captures one agent's config, returns its graph node."""
+    tools = get_tools(agent.tools)
+    model_name = agent.llm_model or "gemini-flash-latest"
+    bound_model = get_chat_model(model_name, agent.temperature or 0.7).bind_tools(tools)
 
     def worker_node(state: CollaborationState) -> dict:
-        prompt = f"{agent.system_prompt}\n\nAssignment: {state['task_description']}"
-        result = model.invoke(prompt)
-        content = result.content
+        fresh = not _returning_from_tools(state)
+        if fresh:
+            subtask = _subtask_for(state, agent.name)
+            assignment = subtask["description"] if subtask else state["task_description"]
+            chat = [HumanMessage(f"{agent.system_prompt}\n\nAssignment: {assignment}")]
+        else:
+            chat = state["agent_chat"]
+
+        ai_msg = invoke_with_retry(bound_model, chat)
+
+        if ai_msg.tool_calls:
+            if fresh:
+                update_chat = [CHAT_RESET, chat[0], ai_msg]
+            else:
+                update_chat = [ai_msg]
+            return {"agent_chat": update_chat, "next": tools_node_name}
+
+        subtask = _subtask_for(state, agent.name)
+        content = _flatten_content(ai_msg.content)
+        subtasks = [dict(s) for s in state["subtasks"]]
+        if subtask:
+            for s in subtasks:
+                if s["id"] == subtask["id"]:
+                    s["status"] = "done"
 
         return {
+            "agent_chat": chat,
+            "subtasks": subtasks,
             "agent_outputs": {
                 agent.name: {
                     "content": content,
@@ -42,39 +108,71 @@ def build_worker_node(agent: Agent):
                 }
             ],
             "current_phase": "working",
+            "history": [
+                log_change(
+                    agent.name,
+                    "agent_outputs",
+                    "merge",
+                    f"submitted subtask {subtask['id']}" if subtask else "submitted task",
+                )
+            ],
+            "next": "route",
         }
 
     return worker_node
 
 
+def build_worker_tool_node(agent: Agent):
+    """Build the ToolNode that executes THIS agent's tools (messages_key = agent_chat)."""
+    return ToolNode(get_tools(agent.tools), messages_key="agent_chat")
+
+
 if __name__ == "__main__":
-    from langgraph.graph import StateGraph, START, END
+    from langgraph.graph import END, START, StateGraph
 
     researcher = Agent(
         name="Researcher",
         role="research",
-        system_prompt="You are a meticulous researcher. Answer concisely and cite facts you are confident about.",
+        system_prompt="You are a meticulous researcher. Gather facts, cite sources, and report concise findings.",
+        tools=["web_search", "note_taker"],
         llm_model="gemini-2.5-flash",
         temperature=0.4,
     )
 
+    def demo_route(state: CollaborationState) -> str:
+        """Single-worker demo: 'tools_Researcher' loops tools, anything else ends."""
+        nxt = state["next"]
+        return nxt if nxt.startswith("tools_") else END
+
     builder = StateGraph(CollaborationState)
-    builder.add_node("researcher", build_worker_node(researcher))
-    builder.add_edge(START, "researcher")
-    builder.add_edge("researcher", END)
+    builder.add_node("Researcher", build_worker_node(researcher, "tools_Researcher"))
+    builder.add_node("tools_Researcher", build_worker_tool_node(researcher))
+    builder.add_edge(START, "Researcher")
+    builder.add_conditional_edges("Researcher", demo_route)
+    builder.add_edge("tools_Researcher", "Researcher")
     graph = builder.compile()
 
-    result = graph.invoke({
-        "task_description": "Explain quantum computing in 3 sentences.",
-        "subtasks": [],
-        "agent_outputs": {},
-        "messages": [],
-        "current_phase": "planning",
-        "final_output": "",
-        "metadata": {},
-    })
+    result = graph.invoke(
+        {
+            "task_description": "Explain quantum computing in 3 sentences.",
+            "subtasks": [
+                {"id": "s1", "agent": "Researcher", "description": "Research the basics of quantum computing.", "status": "pending"}
+            ],
+            "agent_outputs": {},
+            "messages": [],
+            "history": [],
+            "agent_chat": [],
+            "next": "route",
+            "current_phase": "delegating",
+            "final_output": "",
+            "metadata": {},
+        }
+    )
 
-    print("=== AGENT OUTPUT ===")
-    print(result["agent_outputs"]["Researcher"]["content"])
-    print("\n=== MESSAGE ===")
-    print(result["messages"][0])
+    print("=== AGENT OUTPUT (first 400 chars) ===")
+    print(result["agent_outputs"]["Researcher"]["content"][:400])
+    print("\n=== SUBTASK STATUS ===")
+    print(result["subtasks"])
+    print("\n=== AUDIT TRAIL ===")
+    for entry in result["history"]:
+        print(" -", entry["actor"], "->", entry["field"], f"[{entry['action']}]", entry["detail"])
