@@ -79,3 +79,55 @@ class TaskCreate(BaseModel):
 
 class TaskRunRequest(BaseModel):
     input: Any = None
+
+
+class AgentOut(BaseModel):
+    id: str
+    name: str
+    role: Optional[str] = None
+    system_prompt: Optional[str] = None
+    tools: list[str] = []
+    llm_model: str
+    temperature: float
+
+    class Config:
+        from_attributes = True
+
+
+class AgentUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    system_prompt: Optional[str] = None
+    tools: Optional[list[str]] = None
+    llm_model: Optional[str] = None
+    temperature: Optional[float] = None
+
+
+class TeamOut(BaseModel):
+    id: str
+    name: str
+    pattern: Optional[str] = None
+    agent_ids: list[str] = []
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TeamUpdate(BaseModel):
+    name: Optional[str] = None
+    pattern: Optional[str] = None
+    agent_ids: Optional[list[str]] = None
+
+
+class TaskOut(BaseModel):
+    id: str
+    team_id: Optional[str] = None
+    description: Optional[str] = None
+    status: str
+    final_output: Optional[str] = None
+    framework: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
