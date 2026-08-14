@@ -12,7 +12,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from langchain_core.prompts import ChatPromptTemplate
-from langgraph.graph import END
 from pydantic import BaseModel
 
 from app.models.orm_models import Agent
@@ -91,43 +90,73 @@ def build_supervisor_node(agents: list[Agent]):
 def _route_to_next_pending(state: CollaborationState) -> str:
     """Conditional edge: send control to the agent with the next pending subtask.
 
-    Runs AFTER the supervisor and after every worker, so the team keeps working
-    until the plan is empty — dynamic delegation, not a static pipeline.
+    When the plan is empty, everything accepted -> the synthesis node.
     """
     for s in state["subtasks"]:
         if s.get("status") == "pending":
             return s["agent"]
-    return END
+    return "synthesis"
 
 
 def _route_worker(state: CollaborationState) -> str:
-    """Conditional edge from a worker: loop its tools or delegate to the next agent."""
+    """Conditional edge from a worker: loop its tools, submit for review, or delegate."""
     nxt = state["next"]
-    if nxt and nxt != "route":
+    if nxt and nxt.startswith("tools_"):
+        return nxt
+    if nxt == "review":
+        return "reviewer"
+    return _route_to_next_pending(state)
+
+
+def _route_reviewer(state: CollaborationState) -> str:
+    """Conditional edge from the reviewer: revise, reassign, or keep delegating."""
+    nxt = state["next"]
+    if nxt == "reassign":
+        return "reassign"
+    if nxt and nxt not in ("route", ""):
+        return nxt  # a worker name -> revision visit
+    return _route_to_next_pending(state)
+
+
+def _route_reassign(state: CollaborationState) -> str:
+    """Conditional edge after reassignment: to the new agent, or keep delegating."""
+    nxt = state["next"]
+    if nxt and nxt not in ("route", ""):
         return nxt
     return _route_to_next_pending(state)
 
 
-def build_supervisor_graph(agents: list[Agent]):
+def build_supervisor_graph(agents: list[Agent], checkpointer=None):
     """Compile the supervisor-pattern graph for a team of agents.
 
-    START -> supervisor -> (next pending agent)
-                       -> worker_X -> tools_X -> worker_X (ReAct loop) -> (next pending) -> END
+    START -> supervisor -> worker_X -> reviewer -> worker_X (revision loop)
+                                           -> reassign -> new worker (dynamic reassignment)
+                                           -> next pending agent
+                        -> synthesis -> END
     """
     from langgraph.graph import END, START, StateGraph
+
+    from app.services.langgraph.reviewer import build_reassign_node, build_review_node
+    from app.services.langgraph.synthesis import build_synthesis_node
 
     builder = StateGraph(CollaborationState)
     builder.add_node("supervisor", build_supervisor_node(agents))
     for agent in agents:
         builder.add_node(agent.name, build_worker_node(agent, f"tools_{agent.name}"))
         builder.add_node(f"tools_{agent.name}", build_worker_tool_node(agent))
+    builder.add_node("reviewer", build_review_node())
+    builder.add_node("reassign", build_reassign_node(agents))
+    builder.add_node("synthesis", build_synthesis_node())
 
     builder.add_edge(START, "supervisor")
     builder.add_conditional_edges("supervisor", _route_to_next_pending)
     for agent in agents:
         builder.add_conditional_edges(agent.name, _route_worker)
         builder.add_edge(f"tools_{agent.name}", agent.name)
-    return builder.compile()
+    builder.add_conditional_edges("reviewer", _route_reviewer)
+    builder.add_conditional_edges("reassign", _route_reassign)
+    builder.add_edge("synthesis", END)
+    return builder.compile(checkpointer=checkpointer)
 
 
 if __name__ == "__main__":
@@ -153,11 +182,13 @@ if __name__ == "__main__":
     result = graph.invoke(new_state("Write a blog post about AI in healthcare"))
     print("=== SUBTASK PLAN ===")
     for s in result["subtasks"]:
-        print(f" - {s['id']} -> {s['agent']}: {s['description']} [{s['status']}]")
-    print("\n=== AGENT OUTPUTS (first 300 chars each) ===")
+        print(f" - {s['id']} -> {s['agent']}: {s['description'][:70]}... [{s['status']}]")
+    print("\n=== AGENT OUTPUTS (quality + first 120 chars) ===")
     for name, out in result["agent_outputs"].items():
-        print(f"\n--- {name} (quality: {out['quality_score']}, round: {out['revision_round']}) ---")
-        print(out["content"][:300])
+        print(f"--- {name} (quality: {out['quality_score']}, round: {out['revision_round']}) ---")
+        print(out["content"][:120].replace("\n", " "))
+    print("\n=== FINAL OUTPUT (first 500 chars) ===")
+    print(result["final_output"][:500])
     print("\n=== AUDIT TRAIL ===")
     for entry in result["history"]:
         print(" -", entry["actor"], "->", entry["field"], f"[{entry['action']}]", entry["detail"])

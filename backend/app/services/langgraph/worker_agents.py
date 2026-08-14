@@ -56,8 +56,13 @@ def _returning_from_tools(state: CollaborationState) -> bool:
     return bool(chat) and isinstance(chat[-1], ToolMessage)
 
 
-def build_worker_node(agent: Agent, tools_node_name: str):
-    """Closure factory: captures one agent's config, returns its graph node."""
+def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "review"):
+    """Closure factory: captures one agent's config, returns its graph node.
+
+    final_next: routing value written on the FINAL submission —
+    "review" for the supervisor pattern (quality gate), or the next node
+    name for sequential/parallel pipelines.
+    """
     tools = get_tools(agent.tools)
     model_name = agent.llm_model or "gemini-flash-latest"
     bound_model = get_chat_model(model_name, agent.temperature or 0.7).bind_tools(tools)
@@ -67,9 +72,19 @@ def build_worker_node(agent: Agent, tools_node_name: str):
         if fresh:
             subtask = _subtask_for(state, agent.name)
             assignment = subtask["description"] if subtask else state["task_description"]
-            chat = [HumanMessage(f"{agent.system_prompt}\n\nAssignment: {assignment}")]
+            prompt = f"{agent.system_prompt}\n\nAssignment: {assignment}"
+            entry = state["agent_outputs"].get(agent.name, {})
+            if entry.get("revision_round", 0) > 0 and state.get("feedback"):
+                prompt += f"\n\nREVIEWER FEEDBACK — revise your answer accordingly:\n{state['feedback']}"
+            chat = [HumanMessage(prompt)]
+            subtasks = [dict(s) for s in state["subtasks"]]
+            if subtask:
+                for s in subtasks:
+                    if s["id"] == subtask["id"]:
+                        s["status"] = "in_progress"
         else:
             chat = state["agent_chat"]
+            subtasks = None
 
         ai_msg = invoke_with_retry(bound_model, chat)
 
@@ -78,30 +93,25 @@ def build_worker_node(agent: Agent, tools_node_name: str):
                 update_chat = [CHAT_RESET, chat[0], ai_msg]
             else:
                 update_chat = [ai_msg]
-            return {"agent_chat": update_chat, "next": tools_node_name}
+            update = {"agent_chat": update_chat, "next": tools_node_name}
+            if subtasks is not None:
+                update["subtasks"] = subtasks
+            return update
 
-        subtask = _subtask_for(state, agent.name)
         content = _flatten_content(ai_msg.content)
-        subtasks = [dict(s) for s in state["subtasks"]]
-        if subtask:
-            for s in subtasks:
-                if s["id"] == subtask["id"]:
-                    s["status"] = "done"
-
-        return {
-            "agent_chat": chat,
-            "subtasks": subtasks,
+        subtask = _subtask_for(state, agent.name)
+        update = {
             "agent_outputs": {
                 agent.name: {
                     "content": content,
                     "quality_score": None,
-                    "revision_round": 0,
+                    "revision_round": state["agent_outputs"].get(agent.name, {}).get("revision_round", 0),
                 }
             },
             "messages": [
                 {
                     "from_agent": agent.name,
-                    "to_agent": "Supervisor",
+                    "to_agent": "Reviewer" if final_next == "review" else "Synthesis",
                     "message_type": "submission",
                     "content": content,
                     "timestamp": _now(),
@@ -113,11 +123,16 @@ def build_worker_node(agent: Agent, tools_node_name: str):
                     agent.name,
                     "agent_outputs",
                     "merge",
-                    f"submitted subtask {subtask['id']}" if subtask else "submitted task",
+                    f"submitted {'subtask ' + subtask['id'] if subtask else 'task'}",
                 )
             ],
-            "next": "route",
+            "next": final_next,
         }
+        if subtasks is not None:
+            update["subtasks"] = subtasks
+        if final_next == "review":
+            update["review_pending"] = agent.name
+        return update
 
     return worker_node
 

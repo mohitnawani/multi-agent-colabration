@@ -25,7 +25,7 @@ def invoke_with_retry(chain, input, max_attempts: int = 3, base_delay: float = 1
         try:
             return chain.invoke(input)
         except Exception as exc:
-            if "429" in str(exc) and attempt < max_attempts - 1:
+            if ("429" in str(exc) or "503" in str(exc)) and attempt < max_attempts - 1:
                 time.sleep(base_delay * (attempt + 1))
                 continue
             raise

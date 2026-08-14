@@ -87,8 +87,10 @@ class CollaborationState(TypedDict):
     messages: Annotated[list, operator.add]        # {from_agent, to_agent, message_type, content, timestamp}
     history: Annotated[list, operator.add]         # audit trail of every state change
     agent_chat: Annotated[list, agent_chat_reducer]  # LangChain messages of the active worker's tool loop
-    next: str                                      # routing hint: tools_X / route / END
-    current_phase: str                             # planning/delegating/working/reviewing/debating/synthesizing/done
+    next: str                                      # routing hint: tools_X / review / reassign / agent / route
+    review_pending: str                            # agent whose submission awaits quality scoring
+    feedback: str                                  # latest reviewer feedback (used on revision visits)
+    current_phase: str                             # planning/delegating/working/reviewing/synthesizing/done
     final_output: str                              # synthesized deliverable
     metadata: Annotated[dict, merge_dicts]         # {task_id, team_id, framework, started_at, ...}
 
@@ -102,6 +104,8 @@ def new_state(task_description: str, **metadata) -> CollaborationState:
         "history": [],
         "agent_chat": [],
         "next": "route",
+        "review_pending": "",
+        "feedback": "",
         "current_phase": "planning",
         "final_output": "",
         "metadata": metadata,
