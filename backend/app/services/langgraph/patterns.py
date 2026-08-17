@@ -5,8 +5,11 @@
 - Parallel:   a single fan-out node runs EVERY worker's tool loop and
   collects all outputs, then synthesis merges them (fan-in). All agents
   receive the same task; each writes under its own agent_outputs key.
+- Debate:     two or more agents argue FOR/AGAINST, exchange rebuttals,
+  then a Judge picks the winner and writes the consensus answer.
 
-Both end at the synthesis node, so the deliverable is always assembled.
+All three end at a final node (synthesis or judge), so the deliverable is
+always assembled.
 """
 from __future__ import annotations
 
@@ -138,4 +141,22 @@ def build_parallel_graph(agents: list[Agent], checkpointer=None):
     builder.add_edge(START, "parallel_workers")
     builder.add_edge("parallel_workers", "synthesis")
     builder.add_edge("synthesis", END)
+    return builder.compile(checkpointer=checkpointer)
+
+
+def build_debate_graph(agents: list[Agent], checkpointer=None):
+    """Compile the debate pipeline: argument exchange -> judge verdict -> END."""
+    from langgraph.graph import END, START, StateGraph
+
+    from app.services.langgraph.debate import build_debate_node, build_judge_node
+
+    if not agents:
+        raise ValueError("debate graph needs at least one agent")
+
+    builder = StateGraph(CollaborationState)
+    builder.add_node("debate", build_debate_node(agents))
+    builder.add_node("judge", build_judge_node())
+    builder.add_edge(START, "debate")
+    builder.add_edge("debate", "judge")
+    builder.add_edge("judge", END)
     return builder.compile(checkpointer=checkpointer)

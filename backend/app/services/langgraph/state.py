@@ -93,6 +93,10 @@ class CollaborationState(TypedDict):
     current_phase: str                             # planning/delegating/working/reviewing/synthesizing/done
     final_output: str                              # synthesized deliverable
     metadata: Annotated[dict, merge_dicts]         # {task_id, team_id, framework, started_at, ...}
+    positions: Annotated[dict, merge_dicts]        # debate: {agent_name: {stance, content}}
+    arguments: Annotated[list, operator.add]       # debate: [{round, agent, content, timestamp}]
+    consensus: str                                 # debate: judge's winning answer
+    judge_feedback: str                            # debate: why the winner won
 
 
 def new_state(task_description: str, **metadata) -> CollaborationState:
@@ -109,6 +113,10 @@ def new_state(task_description: str, **metadata) -> CollaborationState:
         "current_phase": "planning",
         "final_output": "",
         "metadata": metadata,
+        "positions": {},
+        "arguments": [],
+        "consensus": "",
+        "judge_feedback": "",
     }
 
 

@@ -6,7 +6,7 @@ from app.models.orm_models import Agent, AgentOutput, Message, Task, Team, User
 from app.models.schemas import TaskCreate, TaskOut, TaskRunRequest
 from app.services.auth.dependencies import get_current_user
 from app.services.langgraph.checkpointer import checkpointer, thread_config
-from app.services.langgraph.patterns import build_parallel_graph, build_sequential_graph
+from app.services.langgraph.patterns import build_debate_graph, build_parallel_graph, build_sequential_graph
 from app.services.langgraph.state import new_state
 from app.services.langgraph.supervisor import build_supervisor_graph
 
@@ -37,6 +37,8 @@ def _build_graph(pattern: str, agents: list[Agent]):
         return build_sequential_graph(agents, checkpointer=checkpointer)
     if pattern == "parallel":
         return build_parallel_graph(agents, checkpointer=checkpointer)
+    if pattern == "debate":
+        return build_debate_graph(agents, checkpointer=checkpointer)
     return build_supervisor_graph(agents, checkpointer=checkpointer)
 
 
