@@ -3,14 +3,39 @@ from sqlalchemy.orm import Session
 
 from app.models.database import get_db
 from app.models.orm_models import Agent
-from app.models.schemas import AgentCreate, AgentOut, AgentUpdate
+from app.models.schemas import AgentCreate, AgentFromTemplate, AgentOut, AgentUpdate
+from app.services.templates import AGENT_TEMPLATES, get_template
 
 router = APIRouter()
+
+
+@router.get("/templates")
+def list_templates():
+    return AGENT_TEMPLATES
 
 
 @router.get("/agents", response_model=list[AgentOut])
 def list_agents(db: Session = Depends(get_db)):
     return db.query(Agent).order_by(Agent.name).all()
+
+
+@router.post("/agents/from-template", status_code=201, response_model=AgentOut)
+def create_agent_from_template(payload: AgentFromTemplate, db: Session = Depends(get_db)):
+    template = get_template(payload.template_key)
+    if template is None:
+        raise HTTPException(status_code=404, detail="template not found")
+
+    agent = Agent(
+        name=payload.name,
+        role=template["role"],
+        system_prompt=payload.system_prompt or template["system_prompt"],
+        tools=template["tools"],
+        temperature=template["temperature"],
+    )
+    db.add(agent)
+    db.commit()
+    db.refresh(agent)
+    return agent
 
 
 @router.post("/agents", status_code=201, response_model=AgentOut)

@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from langchain_core.prompts import ChatPromptTemplate
+from langgraph.types import interrupt
 from pydantic import BaseModel
 
 from app.models.orm_models import Agent
@@ -54,7 +55,7 @@ PLAN_PROMPT = ChatPromptTemplate.from_messages(
             "and tools. Give each subtask a short unique id (s1, s2, ...) and a concrete, "
             "actionable description. Every subtask must be assigned to an existing agent.",
         ),
-        ("human", "Task: {task}\n\nAvailable agents:\n{team}"),
+        ("human", "Task: {task}\n\nAvailable agents:\n{team}{feedback_section}"),
     ]
 )
 
@@ -64,7 +65,17 @@ def build_supervisor_node(agents: list[Agent]):
     chain = PLAN_PROMPT | get_chat_model("gemini-3.1-flash-lite", 0.2).with_structured_output(TaskPlan)
 
     def supervisor_node(state: CollaborationState) -> dict:
-        plan = invoke_with_retry(chain, {"task": state["task_description"], "team": _team_roster(agents)})
+        feedback = (state.get("feedback") or "").strip()
+        feedback_section = (
+            f"\n\nREVISION NOTE — the human rejected your previous plan with this feedback: "
+            f"{feedback}\nRevise the subtasks accordingly (change assignments/descriptions)."
+            if feedback
+            else ""
+        )
+        plan = invoke_with_retry(
+            chain,
+            {"task": state["task_description"], "team": _team_roster(agents), "feedback_section": feedback_section},
+        )
         subtasks = [s.model_dump() for s in plan.subtasks]
 
         return {
@@ -85,6 +96,65 @@ def build_supervisor_node(agents: list[Agent]):
         }
 
     return supervisor_node
+
+
+def build_approval_node():
+    """C10: human-approval gate between planning and execution.
+
+    When the run requested approval (require_approval=True), this node pauses
+    the graph with an interrupt — the task sits in `awaiting_review` until the
+    user resumes it via POST /api/tasks/{id}/resume. A rejection loops back to
+    the Supervisor with feedback, producing a revised plan to review again.
+    """
+    def approval_node(state: CollaborationState) -> dict:
+        if not state.get("require_approval", False):
+            return {
+                "current_phase": "delegating",
+                "history": [log_change("Supervisor", "plan", "skip", "no approval requested")],
+            }
+
+        decision = interrupt({"pending_review": True, "plan": state["subtasks"]})
+        approved = bool(decision.get("approved", False))
+        feedback = (decision.get("feedback") or "").strip()
+
+        if approved:
+            return {
+                "current_phase": "delegating",
+                "feedback": "",
+                "messages": [
+                    {
+                        "from_agent": "Human",
+                        "to_agent": "Supervisor",
+                        "message_type": "approval",
+                        "content": "Plan approved — proceed with execution.",
+                        "timestamp": _now(),
+                    }
+                ],
+                "history": [log_change("Human", "subtasks", "approve", "plan approved")],
+            }
+        return {
+            "current_phase": "planning",
+            "feedback": feedback or "No specific feedback — produce a clearer plan.",
+            "messages": [
+                {
+                    "from_agent": "Human",
+                    "to_agent": "Supervisor",
+                    "message_type": "rejection",
+                    "content": f"Plan rejected — feedback: {feedback or 'none given'}",
+                    "timestamp": _now(),
+                }
+            ],
+            "history": [log_change("Human", "subtasks", "reject", f"feedback: {feedback or 'none'}")],
+        }
+
+    return approval_node
+
+
+def _route_approval(state: CollaborationState) -> str:
+    """After the approval gate: re-plan on rejection, otherwise start delegating."""
+    if state.get("current_phase") == "planning":
+        return "supervisor"
+    return _route_to_next_pending(state)
 
 
 def _route_to_next_pending(state: CollaborationState) -> str:
@@ -129,9 +199,9 @@ def _route_reassign(state: CollaborationState) -> str:
 def build_supervisor_graph(agents: list[Agent], checkpointer=None):
     """Compile the supervisor-pattern graph for a team of agents.
 
-    START -> supervisor -> worker_X -> reviewer -> worker_X (revision loop)
-                                           -> reassign -> new worker (dynamic reassignment)
-                                           -> next pending agent
+    START -> supervisor -> approval (human gate) -> worker_X -> reviewer -> worker_X (revision loop)
+                                                   -> supervisor (reject: re-plan with feedback)
+                                                   -> next pending agent
                         -> synthesis -> END
     """
     from langgraph.graph import END, START, StateGraph
@@ -142,6 +212,7 @@ def build_supervisor_graph(agents: list[Agent], checkpointer=None):
 
     builder = StateGraph(CollaborationState)
     builder.add_node("supervisor", build_supervisor_node(agents))
+    builder.add_node("approval", build_approval_node())
     for agent in agents:
         builder.add_node(agent.name, build_worker_node(agent, f"tools_{agent.name}"))
         builder.add_node(f"tools_{agent.name}", build_worker_tool_node(agent))
@@ -150,7 +221,8 @@ def build_supervisor_graph(agents: list[Agent], checkpointer=None):
     builder.add_node("synthesis", build_synthesis_node())
 
     builder.add_edge(START, "supervisor")
-    builder.add_conditional_edges("supervisor", _route_to_next_pending)
+    builder.add_edge("supervisor", "approval")
+    builder.add_conditional_edges("approval", _route_approval)
     for agent in agents:
         builder.add_conditional_edges(agent.name, _route_worker)
         builder.add_edge(f"tools_{agent.name}", agent.name)

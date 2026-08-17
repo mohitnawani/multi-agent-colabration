@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
+from langgraph.types import Command
 from sqlalchemy.orm import Session
 
 from app.models.database import get_db
 from app.models.orm_models import Agent, AgentOutput, Message, Task, Team, User
-from app.models.schemas import TaskCreate, TaskOut, TaskRunRequest
+from app.models.schemas import TaskCreate, TaskOut, TaskResumeRequest, TaskRunRequest
 from app.services.auth.dependencies import get_current_user
 from app.services.langgraph.checkpointer import checkpointer, thread_config
 from app.services.langgraph.patterns import build_debate_graph, build_parallel_graph, build_sequential_graph
@@ -11,6 +12,10 @@ from app.services.langgraph.state import new_state
 from app.services.langgraph.supervisor import build_supervisor_graph
 
 router = APIRouter()
+
+# langgraph 1.x: graph.invoke() does NOT raise on interrupts — it returns the
+# latest state dict with this key holding the pending Interrupt objects.
+INTERRUPT_KEY = "__interrupt__"
 
 
 def _get_owned_task(task_id: str, user_id: str, db: Session) -> Task:
@@ -113,22 +118,88 @@ def run_task(task_id: str, payload: TaskRunRequest, db: Session = Depends(get_db
         team_id=task.team_id,
         framework=task.framework,
     )
+    if payload.require_approval:
+        state["require_approval"] = True
     try:
         result = graph.invoke(state, config=thread_config(task.id))
-        task.status = "done"
-        task.final_output = result.get("final_output", "")
-        _persist_result(db, task, result)
-        db.commit()
-        return {
-            "task_id": task_id,
-            "status": "done",
-            "final_output": task.final_output,
-            "agent_outputs": {
-                name: out.get("quality_score") for name, out in result.get("agent_outputs", {}).items()
-            },
-            "subtasks": result.get("subtasks", []),
-        }
     except Exception as exc:
         task.status = "failed"
         db.commit()
         raise HTTPException(status_code=500, detail=f"task execution failed: {str(exc)[:400]}")
+
+    # langgraph 1.x: an interrupt is returned as an __interrupt__ key, not raised
+    if INTERRUPT_KEY in result:
+        task.status = "awaiting_review"
+        db.commit()
+        return {
+            "task_id": task_id,
+            "status": "awaiting_review",
+            "detail": "Task paused — approve or reject it via POST /api/tasks/{id}/resume",
+            "subtasks": result.get("subtasks", []),
+        }
+
+    task.status = "done"
+    task.final_output = result.get("final_output", "")
+    _persist_result(db, task, result)
+    db.commit()
+    return {
+        "task_id": task_id,
+        "status": "done",
+        "final_output": task.final_output,
+        "agent_outputs": {
+            name: out.get("quality_score") for name, out in result.get("agent_outputs", {}).items()
+        },
+        "subtasks": result.get("subtasks", []),
+    }
+
+
+@router.post("/tasks/{task_id}/resume")
+def resume_task(task_id: str, payload: TaskResumeRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    task = _get_owned_task(task_id, user.id, db)
+    if task.status != "awaiting_review":
+        raise HTTPException(status_code=400, detail="task is not awaiting review")
+    team = db.get(Team, task.team_id)
+    if team is None:
+        raise HTTPException(status_code=400, detail="team not found")
+    agents = _team_agents(team, db)
+    if not agents:
+        raise HTTPException(status_code=400, detail="team has no agents")
+
+    graph = _build_graph(team.pattern or "supervisor", agents)
+
+    task.status = "running"
+    db.commit()
+    try:
+        result = graph.invoke(
+            Command(resume={"approved": payload.approval, "feedback": payload.feedback or ""}),
+            config=thread_config(task.id),
+        )
+    except Exception as exc:
+        task.status = "failed"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"task execution failed: {str(exc)[:400]}")
+
+    if INTERRUPT_KEY in result:
+        # Rejection -> revised plan was produced -> paused again for a new decision
+        task.status = "awaiting_review"
+        db.commit()
+        return {
+            "task_id": task_id,
+            "status": "awaiting_review",
+            "detail": "Plan was rejected — the revised plan awaits your approval.",
+            "subtasks": result.get("subtasks", []),
+        }
+
+    task.status = "done"
+    task.final_output = result.get("final_output", "")
+    _persist_result(db, task, result)
+    db.commit()
+    return {
+        "task_id": task_id,
+        "status": "done",
+        "final_output": task.final_output,
+        "agent_outputs": {
+            name: out.get("quality_score") for name, out in result.get("agent_outputs", {}).items()
+        },
+        "subtasks": result.get("subtasks", []),
+    }

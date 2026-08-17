@@ -79,6 +79,18 @@ class TaskCreate(BaseModel):
 
 class TaskRunRequest(BaseModel):
     input: Any = None
+    require_approval: bool = False  # C10: pause after planning for human approval
+
+
+class TaskResumeRequest(BaseModel):
+    approval: bool = True
+    feedback: Optional[str] = None  # required context when rejecting the plan
+
+
+class AgentFromTemplate(BaseModel):
+    template_key: str
+    name: str
+    system_prompt: Optional[str] = None  # optional custom override
 
 
 class AgentOut(BaseModel):
