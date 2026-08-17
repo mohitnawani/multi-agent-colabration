@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from langgraph.types import Command
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
 
 from app.models.database import get_db
 from app.models.orm_models import Agent, AgentOutput, Message, Task, Team, User
@@ -10,11 +11,12 @@ from app.services.langgraph.checkpointer import checkpointer, thread_config
 from app.services.langgraph.patterns import build_debate_graph, build_parallel_graph, build_sequential_graph
 from app.services.langgraph.state import new_state
 from app.services.langgraph.supervisor import build_supervisor_graph
+from app.services.streaming import hub, make_event, sse_format
 
 router = APIRouter()
 
-# langgraph 1.x: graph.invoke() does NOT raise on interrupts — it returns the
-# latest state dict with this key holding the pending Interrupt objects.
+# langgraph 1.x: with stream_mode="updates" an interrupt surfaces as its own
+# chunk {'__interrupt__': (...)} — not an exception.
 INTERRUPT_KEY = "__interrupt__"
 
 
@@ -97,9 +99,62 @@ def delete_task(task_id: str, db: Session = Depends(get_db), user: User = Depend
     db.commit()
 
 
+def _stream_and_finish(graph, input, config, task: Task, db: Session, paused_detail: str) -> dict:
+    """Run the graph with streaming; emit hub events; persist; return the response.
+
+    - Each node update chunk -> a 'progress' hub event
+    - Interrupt chunk -> 'interrupt' event, task -> awaiting_review, return pause response
+    - Run finished -> persist outputs/messages, 'done' event, return done response
+    - Exception -> 'error' event, task -> failed, raise 500
+    """
+    from datetime import datetime, timezone
+
+    def _ts() -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    try:
+        for chunk in graph.stream(input, config, stream_mode="updates"):
+            if INTERRUPT_KEY in chunk:
+                hub.emit(task.id, {"type": "interrupt", "detail": paused_detail, "timestamp": _ts()})
+                task.status = "awaiting_review"
+                db.commit()
+                values = graph.get_state(config).values
+                return {
+                    "task_id": task.id,
+                    "status": "awaiting_review",
+                    "detail": paused_detail,
+                    "subtasks": values.get("subtasks", []),
+                }
+            for node, update in chunk.items():
+                hub.emit(task.id, make_event(node, update))
+    except Exception as exc:
+        hub.emit(task.id, {"type": "error", "detail": str(exc)[:200], "timestamp": _ts()})
+        task.status = "failed"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"task execution failed: {str(exc)[:400]}")
+
+    values = graph.get_state(config).values
+    task.status = "done"
+    task.final_output = values.get("final_output", "")
+    _persist_result(db, task, values)
+    db.commit()
+    hub.emit(task.id, {"type": "done", "final_output": task.final_output, "timestamp": _ts()})
+    return {
+        "task_id": task.id,
+        "status": "done",
+        "final_output": task.final_output,
+        "agent_outputs": {
+            name: out.get("quality_score") for name, out in values.get("agent_outputs", {}).items()
+        },
+        "subtasks": values.get("subtasks", []),
+    }
+
+
 @router.post("/tasks/{task_id}/run")
 def run_task(task_id: str, payload: TaskRunRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _get_owned_task(task_id, user.id, db)
+    if task.status == "running":
+        raise HTTPException(status_code=409, detail="task is already running")
     team = db.get(Team, task.team_id)
     if team is None:
         raise HTTPException(status_code=400, detail="team not found")
@@ -109,6 +164,7 @@ def run_task(task_id: str, payload: TaskRunRequest, db: Session = Depends(get_db
 
     graph = _build_graph(team.pattern or "supervisor", agents)
 
+    hub.clear(task.id)
     task.status = "running"
     db.commit()
 
@@ -120,37 +176,14 @@ def run_task(task_id: str, payload: TaskRunRequest, db: Session = Depends(get_db
     )
     if payload.require_approval:
         state["require_approval"] = True
-    try:
-        result = graph.invoke(state, config=thread_config(task.id))
-    except Exception as exc:
-        task.status = "failed"
-        db.commit()
-        raise HTTPException(status_code=500, detail=f"task execution failed: {str(exc)[:400]}")
-
-    # langgraph 1.x: an interrupt is returned as an __interrupt__ key, not raised
-    if INTERRUPT_KEY in result:
-        task.status = "awaiting_review"
-        db.commit()
-        return {
-            "task_id": task_id,
-            "status": "awaiting_review",
-            "detail": "Task paused — approve or reject it via POST /api/tasks/{id}/resume",
-            "subtasks": result.get("subtasks", []),
-        }
-
-    task.status = "done"
-    task.final_output = result.get("final_output", "")
-    _persist_result(db, task, result)
-    db.commit()
-    return {
-        "task_id": task_id,
-        "status": "done",
-        "final_output": task.final_output,
-        "agent_outputs": {
-            name: out.get("quality_score") for name, out in result.get("agent_outputs", {}).items()
-        },
-        "subtasks": result.get("subtasks", []),
-    }
+    return _stream_and_finish(
+        graph,
+        state,
+        thread_config(task.id),
+        task,
+        db,
+        "Task paused — approve or reject it via POST /api/tasks/{id}/resume",
+    )
 
 
 @router.post("/tasks/{task_id}/resume")
@@ -169,37 +202,93 @@ def resume_task(task_id: str, payload: TaskResumeRequest, db: Session = Depends(
 
     task.status = "running"
     db.commit()
-    try:
-        result = graph.invoke(
-            Command(resume={"approved": payload.approval, "feedback": payload.feedback or ""}),
-            config=thread_config(task.id),
-        )
-    except Exception as exc:
-        task.status = "failed"
-        db.commit()
-        raise HTTPException(status_code=500, detail=f"task execution failed: {str(exc)[:400]}")
+    return _stream_and_finish(
+        graph,
+        Command(resume={"approved": payload.approval, "feedback": payload.feedback or ""}),
+        thread_config(task.id),
+        task,
+        db,
+        "Plan was rejected — the revised plan awaits your approval.",
+    )
 
-    if INTERRUPT_KEY in result:
-        # Rejection -> revised plan was produced -> paused again for a new decision
-        task.status = "awaiting_review"
-        db.commit()
-        return {
-            "task_id": task_id,
-            "status": "awaiting_review",
-            "detail": "Plan was rejected — the revised plan awaits your approval.",
-            "subtasks": result.get("subtasks", []),
-        }
 
-    task.status = "done"
-    task.final_output = result.get("final_output", "")
-    _persist_result(db, task, result)
-    db.commit()
-    return {
-        "task_id": task_id,
-        "status": "done",
-        "final_output": task.final_output,
-        "agent_outputs": {
-            name: out.get("quality_score") for name, out in result.get("agent_outputs", {}).items()
+@router.get("/tasks/{task_id}/stream")
+async def stream_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """SSE endpoint: live progress while running, DB replay once finished.
+
+    Events: progress / interrupt / done / error. Heartbeat `: ping` every 15s
+    keeps the connection alive during long running phases. The stream closes
+    when the task is no longer running.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    task = _get_owned_task(task_id, user.id, db)
+
+    async def event_stream():
+        def _ts() -> str:
+            return datetime.now(timezone.utc).isoformat()
+
+        # 1) catch-up: anything already emitted for this run
+        for ev in hub.snapshot(task.id):
+            yield sse_format(ev)
+
+        # 2) live phase: wait on the hub while the task is running
+        while task.status == "running":
+            events = await asyncio.to_thread(hub.wait, task.id, 15.0)
+            if not events:
+                yield ": ping\n\n"
+                continue
+            for ev in events:
+                yield sse_format(ev)
+            db.expire_all()
+            db.refresh(task)
+
+        # 3) terminal phase: replay from DB, then close
+        if task.status == "awaiting_review":
+            if not hub.snapshot(task.id):
+                yield sse_format(
+                    {"type": "interrupt", "detail": "task paused — awaiting approval", "timestamp": _ts()}
+                )
+            yield sse_format({"type": "paused", "detail": "reconnect after resume", "timestamp": _ts()})
+        elif task.status == "done":
+            for row in db.query(Message).filter(Message.task_id == task.id).order_by(Message.created_at).all():
+                yield sse_format(
+                    {
+                        "type": "progress",
+                        "node": row.from_agent,
+                        "phase": "",
+                        "summary": (row.content or "")[:200],
+                        "timestamp": row.created_at.isoformat() if row.created_at else _ts(),
+                    }
+                )
+            for row in db.query(AgentOutput).filter(AgentOutput.task_id == task.id).order_by(AgentOutput.created_at).all():
+                score = row.quality_score
+                yield sse_format(
+                    {
+                        "type": "progress",
+                        "node": row.agent_name,
+                        "phase": "",
+                        "summary": f"{row.agent_name} — quality "
+                        + (f"{score:.2f}" if score is not None else "n/a"),
+                        "timestamp": row.created_at.isoformat() if row.created_at else _ts(),
+                    }
+                )
+            yield sse_format(
+                {"type": "done", "final_output": task.final_output or "", "timestamp": _ts()}
+            )
+        elif task.status == "failed":
+            yield sse_format({"type": "error", "detail": "task failed", "timestamp": _ts()})
+        else:
+            yield sse_format({"type": "idle", "detail": "task has not run yet", "timestamp": _ts()})
+        yield "event: end\ndata: {}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
         },
-        "subtasks": result.get("subtasks", []),
-    }
+    )
