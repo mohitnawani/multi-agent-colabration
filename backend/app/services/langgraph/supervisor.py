@@ -61,7 +61,7 @@ PLAN_PROMPT = ChatPromptTemplate.from_messages(
 
 def build_supervisor_node(agents: list[Agent]):
     """Closure factory: captures the team roster, returns the graph node."""
-    chain = PLAN_PROMPT | get_chat_model("gemini-flash-latest", 0.2).with_structured_output(TaskPlan)
+    chain = PLAN_PROMPT | get_chat_model("gemini-3.1-flash-lite", 0.2).with_structured_output(TaskPlan)
 
     def supervisor_node(state: CollaborationState) -> dict:
         plan = invoke_with_retry(chain, {"task": state["task_description"], "team": _team_roster(agents)})
@@ -138,6 +138,7 @@ def build_supervisor_graph(agents: list[Agent], checkpointer=None):
 
     from app.services.langgraph.reviewer import build_reassign_node, build_review_node
     from app.services.langgraph.synthesis import build_synthesis_node
+    from app.services.langgraph.worker_agents import build_worker_node, build_worker_tool_node
 
     builder = StateGraph(CollaborationState)
     builder.add_node("supervisor", build_supervisor_node(agents))

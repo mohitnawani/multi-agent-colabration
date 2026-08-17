@@ -64,7 +64,7 @@ def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "rev
     name for sequential/parallel pipelines.
     """
     tools = get_tools(agent.tools)
-    model_name = agent.llm_model or "gemini-flash-latest"
+    model_name = agent.llm_model or "gemini-3.1-flash-lite"
     bound_model = get_chat_model(model_name, agent.temperature or 0.7).bind_tools(tools)
 
     def worker_node(state: CollaborationState) -> dict:
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         role="research",
         system_prompt="You are a meticulous researcher. Gather facts, cite sources, and report concise findings.",
         tools=["web_search", "note_taker"],
-        llm_model="gemini-2.5-flash",
+        llm_model="gemini-3.1-flash-lite",
         temperature=0.4,
     )
 

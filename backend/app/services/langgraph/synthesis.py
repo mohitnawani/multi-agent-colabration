@@ -39,7 +39,7 @@ SYNTHESIS_PROMPT = ChatPromptTemplate.from_messages(
 
 def build_synthesis_node():
     """Closure factory: returns the synthesis graph node."""
-    chain = SYNTHESIS_PROMPT | get_chat_model("gemini-flash-latest", 0.7)
+    chain = SYNTHESIS_PROMPT | get_chat_model("gemini-3.1-flash-lite", 0.7)
 
     def synthesis_node(state: CollaborationState) -> dict:
         accepted = {

@@ -54,7 +54,7 @@ REVIEW_PROMPT = ChatPromptTemplate.from_messages(
 
 def build_review_node():
     """Closure factory: returns the reviewer graph node."""
-    chain = REVIEW_PROMPT | get_chat_model("gemini-flash-latest", 0.2).with_structured_output(QualityReview)
+    chain = REVIEW_PROMPT | get_chat_model("gemini-3.1-flash-lite", 0.2).with_structured_output(QualityReview)
 
     def _find_subtask(state: CollaborationState, agent_name: str) -> dict | None:
         for s in state["subtasks"]:
