@@ -4,6 +4,8 @@ class Settings(BaseSettings):
     database_url: str
     google_api_key: str = ""
     openai_api_key: str = ""
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-20b"
     tavily_api_key: str = ""
     jwt_secret_key: str = "change-me"
     jwt_algorithm: str = "HS256"

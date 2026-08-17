@@ -21,7 +21,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import get_chat_model, invoke_with_retry
+from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, invoke_with_retry
 from app.services.langgraph.state import CollaborationState, log_change
 
 QUALITY_THRESHOLD = 0.7
@@ -54,7 +54,7 @@ REVIEW_PROMPT = ChatPromptTemplate.from_messages(
 
 def build_review_node():
     """Closure factory: returns the reviewer graph node."""
-    chain = REVIEW_PROMPT | get_chat_model("gemini-3.1-flash-lite", 0.2).with_structured_output(QualityReview)
+    chain = REVIEW_PROMPT | get_chat_model(DEFAULT_MODEL, 0.2).with_structured_output(QualityReview)
 
     def _find_subtask(state: CollaborationState, agent_name: str) -> dict | None:
         for s in state["subtasks"]:

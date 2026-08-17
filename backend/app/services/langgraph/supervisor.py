@@ -16,7 +16,7 @@ from langgraph.types import interrupt
 from pydantic import BaseModel
 
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import get_chat_model, invoke_with_retry
+from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, invoke_with_retry
 from app.services.langgraph.state import CollaborationState, log_change, new_state
 
 
@@ -62,7 +62,7 @@ PLAN_PROMPT = ChatPromptTemplate.from_messages(
 
 def build_supervisor_node(agents: list[Agent]):
     """Closure factory: captures the team roster, returns the graph node."""
-    chain = PLAN_PROMPT | get_chat_model("gemini-3.1-flash-lite", 0.2).with_structured_output(TaskPlan)
+    chain = PLAN_PROMPT | get_chat_model(DEFAULT_MODEL, 0.2).with_structured_output(TaskPlan)
 
     def supervisor_node(state: CollaborationState) -> dict:
         feedback = (state.get("feedback") or "").strip()

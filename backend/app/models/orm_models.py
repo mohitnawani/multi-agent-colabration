@@ -36,7 +36,7 @@ class Agent(Base):
     role = Column(String)
     system_prompt = Column(Text)
     tools = Column(JSON, default=list)
-    llm_model = Column(String, default="gemini-3.1-flash-lite")
+    llm_model = Column(String, default="openai/gpt-oss-20b")
     temperature = Column(Float, default=0.7)
 
 class Task(Base):

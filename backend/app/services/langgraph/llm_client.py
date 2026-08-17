@@ -4,22 +4,27 @@ import random
 import re
 import time
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Groq exposes an OpenAI-compatible API.
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+DEFAULT_MODEL = settings.groq_model or "openai/gpt-oss-20b"
+
 
 @lru_cache(maxsize=64)
 def get_chat_model(
-    model: str = "gemini-3.1-flash-lite",
-    temperature: float = 1.0,  # Gemini 3.x defaults to 1.0; 0.7 can degrade reasoning
-) -> ChatGoogleGenerativeAI:
-    return ChatGoogleGenerativeAI(
+    model: str = DEFAULT_MODEL,
+    temperature: float = 1.0,
+) -> ChatOpenAI:
+    return ChatOpenAI(
         model=model,
         temperature=temperature,
-        api_key=settings.google_api_key or None,
+        api_key=settings.groq_api_key or None,
+        base_url=GROQ_BASE_URL,
     )
 
 
@@ -39,12 +44,11 @@ def _classify_error(exc: Exception) -> str:
 
     'quota_exhausted' = a real daily/zero quota wall (limit: 0, or the
         server suggests retrying in hours) — retrying won't help.
-    'transient' = ordinary rate burst (429 with a short retry delay, e.g.
-        the per-minute cap on free tier) or a 503 — worth a backoff retry.
+    'transient' = ordinary rate burst (429 with a short retry delay) or a
+        503 — worth a backoff retry.
 
-    Free-tier flash-lite is 500 req/day with a per-minute burst cap: those
-    bursts return 429 with "retry in ~20-30s", so we must NOT treat every
-    429 as a daily quota wall (that was killing runs mid-task).
+    Works for any provider (Gemini, Grok, OpenAI): transient 429s carry a
+    short retry delay, real quota walls report limit: 0 or long delays.
     """
     msg = str(exc)
 
@@ -86,7 +90,7 @@ def invoke_with_retry(
             kind = _classify_error(exc)
 
             if kind == "quota_exhausted":
-                logger.error("Gemini quota exhausted, not retrying: %s", exc)
+                logger.error("LLM quota exhausted, not retrying: %s", exc)
                 raise
 
             if kind == "transient" and attempt < max_attempts - 1:

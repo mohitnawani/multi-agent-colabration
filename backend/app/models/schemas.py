@@ -67,7 +67,7 @@ class AgentCreate(BaseModel):
     role: Optional[str] = None
     system_prompt: Optional[str] = None
     tools: list[str] = []
-    llm_model: Optional[str] = "gemini-3.1-flash-lite"
+    llm_model: Optional[str] = "openai/gpt-oss-20b"
     temperature: Optional[float] = 0.7
 
 

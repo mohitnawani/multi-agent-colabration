@@ -21,7 +21,7 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.prebuilt import ToolNode
 
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import get_chat_model, invoke_with_retry
+from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, invoke_with_retry
 from app.services.langgraph.state import CHAT_RESET, CollaborationState, log_change
 from app.services.tools.research_tools import get_tools
 
@@ -64,7 +64,7 @@ def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "rev
     name for sequential/parallel pipelines.
     """
     tools = get_tools(agent.tools)
-    model_name = agent.llm_model or "gemini-3.1-flash-lite"
+    model_name = agent.llm_model or DEFAULT_MODEL
     bound_model = get_chat_model(model_name, agent.temperature or 0.7).bind_tools(tools)
 
     def worker_node(state: CollaborationState) -> dict:
@@ -150,7 +150,7 @@ if __name__ == "__main__":
         role="research",
         system_prompt="You are a meticulous researcher. Gather facts, cite sources, and report concise findings.",
         tools=["web_search", "note_taker"],
-        llm_model="gemini-3.1-flash-lite",
+        llm_model=DEFAULT_MODEL,
         temperature=0.4,
     )
 

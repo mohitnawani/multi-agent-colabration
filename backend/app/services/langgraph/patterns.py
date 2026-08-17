@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import get_chat_model
+from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model
 from app.services.langgraph.state import CollaborationState, log_change
 from app.services.langgraph.synthesis import build_synthesis_node
 from app.services.langgraph.worker_agents import _flatten_content, build_worker_node, build_worker_tool_node
@@ -75,7 +75,7 @@ def build_parallel_worker_node(agents: list[Agent]):
     for agent in agents:
         tools = get_tools(agent.tools)
         tools_by_name = {t.name: t for t in tools}
-        model_name = agent.llm_model or "gemini-3.1-flash-lite"
+        model_name = agent.llm_model or DEFAULT_MODEL
         workers.append((agent, tools_by_name, get_chat_model(model_name, agent.temperature or 0.7).bind_tools(tools)))
 
     def parallel_worker_node(state: CollaborationState) -> dict:

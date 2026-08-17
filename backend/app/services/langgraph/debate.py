@@ -19,7 +19,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel
 
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import get_chat_model, invoke_with_retry
+from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, invoke_with_retry
 from app.services.langgraph.state import CollaborationState, log_change
 
 DEBATE_ROUNDS = 2
@@ -46,7 +46,7 @@ def build_debate_node(agents: list[Agent], rounds: int = DEBATE_ROUNDS):
     workers = []
     for i, agent in enumerate(agents):
         stance = _stance(i, len(agents))
-        model = get_chat_model(agent.llm_model or "gemini-3.1-flash-lite", agent.temperature or 0.7)
+        model = get_chat_model(agent.llm_model or DEFAULT_MODEL, agent.temperature or 0.7)
         workers.append((agent, stance, model))
 
     def debate_node(state: CollaborationState) -> dict:
@@ -142,7 +142,7 @@ JUDGE_PROMPT = ChatPromptTemplate.from_messages(
 )
 
 
-def build_judge_node(model: str = "gemini-3.1-flash-lite"):
+def build_judge_node(model: str = DEFAULT_MODEL):
     """Judge node: structured verdict -> consensus + final_output."""
     chain = JUDGE_PROMPT | get_chat_model(model, 0.2).with_structured_output(JudgeVerdict)
 

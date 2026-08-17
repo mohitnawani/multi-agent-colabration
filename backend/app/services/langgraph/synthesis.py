@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.services.langgraph.llm_client import get_chat_model, invoke_with_retry
+from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, invoke_with_retry
 from app.services.langgraph.reviewer import QUALITY_THRESHOLD
 from app.services.langgraph.state import CollaborationState, log_change
 from app.services.langgraph.worker_agents import _flatten_content
@@ -39,7 +39,7 @@ SYNTHESIS_PROMPT = ChatPromptTemplate.from_messages(
 
 def build_synthesis_node():
     """Closure factory: returns the synthesis graph node."""
-    chain = SYNTHESIS_PROMPT | get_chat_model("gemini-3.1-flash-lite", 0.7)
+    chain = SYNTHESIS_PROMPT | get_chat_model(DEFAULT_MODEL, 0.7)
 
     def synthesis_node(state: CollaborationState) -> dict:
         accepted = {
