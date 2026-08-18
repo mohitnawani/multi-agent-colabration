@@ -1,6 +1,10 @@
+import { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router'
 import { logout } from '../features/auth/authSlice'
+import { listTeams } from '../features/teams/teamsSlice'
+import { listAgents } from '../features/agents/agentsSlice'
+import { listTasks } from '../features/tasks/tasksSlice'
 import { Link } from 'react-router'
 import type { RootState, AppDispatch } from '../store'
 
@@ -8,6 +12,15 @@ export default function DashboardPage() {
   const dispatch = useDispatch<AppDispatch>()
   const navigate = useNavigate()
   const { user } = useSelector((state: RootState) => state.auth)
+  const teamsCount = useSelector((state: RootState) => state.teams.teams.length)
+  const agentsCount = useSelector((state: RootState) => state.agents.agents.length)
+  const tasksCount = useSelector((state: RootState) => state.tasks.tasks.length)
+
+  useEffect(() => {
+    dispatch(listTeams())
+    dispatch(listAgents())
+    dispatch(listTasks())
+  }, [dispatch])
 
   const handleLogout = () => {
     dispatch(logout())
@@ -38,7 +51,7 @@ export default function DashboardPage() {
             <li><Link to="/dashboard" className="btn btn-ghost active">Dashboard</Link></li>
             <li><Link to="/teams" className="btn btn-ghost">Teams</Link></li>
             <li><Link to="/agents" className="btn btn-ghost">Agents</Link></li>
-            <li><a className="btn btn-ghost">Tasks</a></li>
+            <li><Link to="/tasks" className="btn btn-ghost">Tasks</Link></li>
           </ul>
         </div>
         <div className="navbar-end">
@@ -58,7 +71,7 @@ export default function DashboardPage() {
             <Link to="/teams" className="card bg-base-100 border border-base-300 hover:shadow-lg transition-shadow no-underline">
               <div className="card-body">
                 <h2 className="card-title text-base-content">Teams</h2>
-                <p className="text-4xl font-bold text-primary">0</p>
+                <p className="text-4xl font-bold text-primary">{teamsCount}</p>
                 <p className="text-base-content/50">Create teams to organize agents</p>
                 <div className="card-actions justify-end mt-4">
                   <button className="btn btn-primary">Create Team</button>
@@ -69,7 +82,7 @@ export default function DashboardPage() {
             <Link to="/agents" className="card bg-base-100 border border-base-300 hover:shadow-lg transition-shadow no-underline">
               <div className="card-body">
                 <h2 className="card-title text-base-content">Agents</h2>
-                <p className="text-4xl font-bold text-secondary">0</p>
+                <p className="text-4xl font-bold text-secondary">{agentsCount}</p>
                 <p className="text-base-content/50">Add AI agents to your teams</p>
                 <div className="card-actions justify-end mt-4">
                   <button className="btn btn-secondary">Add Agent</button>
@@ -77,16 +90,16 @@ export default function DashboardPage() {
               </div>
             </Link>
             
-            <div className="card bg-base-100 border border-base-300">
+            <Link to="/tasks" className="card bg-base-100 border border-base-300 hover:shadow-lg transition-shadow no-underline">
               <div className="card-body">
                 <h2 className="card-title text-base-content">Tasks</h2>
-                <p className="text-4xl font-bold text-accent">0</p>
+                <p className="text-4xl font-bold text-accent">{tasksCount}</p>
                 <p className="text-base-content/50">Run collaborative tasks</p>
                 <div className="card-actions justify-end mt-4">
                   <button className="btn btn-accent">New Task</button>
                 </div>
               </div>
-            </div>
+            </Link>
           </div>
 
           <div className="card bg-base-100 border border-base-300">
@@ -96,6 +109,7 @@ export default function DashboardPage() {
               <div className="flex gap-4">
                 <Link to="/teams" className="btn btn-primary">Create Team</Link>
                 <Link to="/agents" className="btn btn-outline">Create Agent</Link>
+                <Link to="/tasks" className="btn btn-accent">New Task</Link>
               </div>
             </div>
           </div>

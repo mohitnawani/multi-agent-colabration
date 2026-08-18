@@ -75,6 +75,7 @@ class TaskCreate(BaseModel):
     team_id: str
     description: str
     framework: Optional[str] = "langgraph"
+    require_approval: bool = False  # pause after planning for human approval
 
 
 class TaskRunRequest(BaseModel):
@@ -139,6 +140,7 @@ class TaskOut(BaseModel):
     status: str
     final_output: Optional[str] = None
     framework: str
+    require_approval: bool = False
     created_at: datetime
 
     class Config:

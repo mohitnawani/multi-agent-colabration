@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { Link } from 'react-router'
 import { listTeams, createTeam, deleteTeam } from '../features/teams/teamsSlice'
 import { listAgents } from '../features/agents/agentsSlice'
 import type { RootState, AppDispatch } from '../store'
@@ -83,13 +84,14 @@ export default function TeamsPage() {
     <div className="min-h-screen bg-base-100">
       <nav className="navbar bg-base-100 border-b border-base-300">
         <div className="navbar-start">
-          <a className="btn btn-ghost text-xl font-bold">Multi-Agent Collaboration</a>
+          <Link to="/dashboard" className="btn btn-ghost text-xl font-bold">Multi-Agent Collaboration</Link>
         </div>
         <div className="navbar-center hidden lg:flex">
           <ul className="menu menu-horizontal px-1">
-            <li><a className="btn btn-ghost" href="/dashboard">Dashboard</a></li>
-            <li><a className="btn btn-ghost active" href="/teams">Teams</a></li>
-            <li><a className="btn btn-ghost" href="/agents">Agents</a></li>
+            <li><Link to="/dashboard" className="btn btn-ghost">Dashboard</Link></li>
+            <li><Link to="/teams" className="btn btn-ghost active">Teams</Link></li>
+            <li><Link to="/agents" className="btn btn-ghost">Agents</Link></li>
+            <li><Link to="/tasks" className="btn btn-ghost">Tasks</Link></li>
           </ul>
         </div>
       </nav>

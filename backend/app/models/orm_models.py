@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, DateTime, JSON, ForeignKey, Text
+from sqlalchemy import Boolean, Column, String, Integer, Float, DateTime, JSON, ForeignKey, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -32,12 +32,15 @@ class Team(Base):
 class Agent(Base):
     __tablename__ = "agents"
     id = Column(String, primary_key=True, default=gen_id)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
     role = Column(String)
     system_prompt = Column(Text)
     tools = Column(JSON, default=list)
     llm_model = Column(String, default="openai/gpt-oss-20b")
     temperature = Column(Float, default=0.7)
+
+    __table_args__ = (UniqueConstraint("user_id", "name", name="agents_user_id_name_key"),)
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -48,6 +51,7 @@ class Task(Base):
     status = Column(String, default="pending")  # pending/running/done/failed/awaiting_review
     final_output = Column(Text, nullable=True)
     framework = Column(String, default="langgraph")
+    require_approval = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

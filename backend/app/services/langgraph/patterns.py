@@ -76,7 +76,10 @@ def build_parallel_worker_node(agents: list[Agent]):
         tools = get_tools(agent.tools)
         tools_by_name = {t.name: t for t in tools}
         model_name = agent.llm_model or DEFAULT_MODEL
-        workers.append((agent, tools_by_name, get_chat_model(model_name, agent.temperature or 0.7).bind_tools(tools)))
+        chat_model = get_chat_model(model_name, agent.temperature or 0.7)
+        # Only bind when there are tools — bind_tools([]) sends tool_choice="none"
+        # and some models still emit a tool call -> hard 400.
+        workers.append((agent, tools_by_name, chat_model.bind_tools(tools) if tools else chat_model))
 
     def parallel_worker_node(state: CollaborationState) -> dict:
         outputs = {}

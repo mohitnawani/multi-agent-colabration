@@ -42,3 +42,47 @@ export interface CreateAgentFromTemplatePayload {
   name: string;
   system_prompt?: string;
 }
+
+export interface Task {
+  id: string;
+  team_id: string | null;
+  description: string | null;
+  status: string;
+  final_output: string | null;
+  framework: string;
+  require_approval: boolean;
+  created_at: string;
+  agent_outputs?: Record<string, number>;
+  subtasks?: unknown[];
+}
+
+export interface CreateTaskPayload {
+  team_id: string;
+  description: string;
+  require_approval?: boolean;
+}
+
+export interface RunResult {
+  task_id: string;
+  status: string;
+  final_output: string;
+  agent_outputs?: Record<string, number>;
+  subtasks?: unknown[];
+}
+
+export interface ResumeTaskPayload {
+  approval: boolean;
+  feedback?: string;
+}
+
+export type ProgressEventType = 'progress' | 'interrupt' | 'paused' | 'done' | 'error' | 'idle';
+
+export interface ProgressEvent {
+  type: ProgressEventType;
+  node?: string;
+  phase?: string;
+  summary?: string;
+  detail?: string;
+  final_output?: string;
+  timestamp?: string;
+}

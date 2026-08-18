@@ -64,8 +64,13 @@ def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "rev
     name for sequential/parallel pipelines.
     """
     tools = get_tools(agent.tools)
+    tool_names = {t.name for t in tools}
     model_name = agent.llm_model or DEFAULT_MODEL
-    bound_model = get_chat_model(model_name, agent.temperature or 0.7).bind_tools(tools)
+    bound_model = get_chat_model(model_name, agent.temperature or 0.7)
+    # Only bind tools when there ARE any: bind_tools([]) makes the API send
+    # tool_choice="none", and some models still emit a tool call -> hard 400.
+    if tools:
+        bound_model = bound_model.bind_tools(tools)
 
     def worker_node(state: CollaborationState) -> dict:
         fresh = not _returning_from_tools(state)
@@ -88,7 +93,7 @@ def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "rev
 
         ai_msg = invoke_with_retry(bound_model, chat)
 
-        if ai_msg.tool_calls:
+        if ai_msg.tool_calls and any(tc.get("name") in tool_names for tc in ai_msg.tool_calls):
             if fresh:
                 update_chat = [CHAT_RESET, chat[0], ai_msg]
             else:
@@ -97,6 +102,24 @@ def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "rev
             if subtasks is not None:
                 update["subtasks"] = subtasks
             return update
+
+        # The model tried to call a tool this agent does NOT have (e.g. a
+        # model-native tool like browser.search) — ask it once to answer
+        # directly instead of crashing the run.
+        if ai_msg.tool_calls:
+            ai_msg = invoke_with_retry(
+                bound_model,
+                chat + [ai_msg] + [HumanMessage(
+                    "You tried to use a tool that is not available to you. "
+                    "Answer the assignment directly using your own knowledge — do not call any tools."
+                )],
+            )
+            if ai_msg.tool_calls:
+                # still insisting — drop the tool calls and keep whatever text it gave
+                ai_msg = type(ai_msg)(
+                    content=ai_msg.content or "No answer could be produced without the requested tool.",
+                    id=ai_msg.id,
+                )
 
         content = _flatten_content(ai_msg.content)
         subtask = _subtask_for(state, agent.name)

@@ -16,12 +16,28 @@ def _get_owned_team(team_id: str, user_id: str, db: Session) -> Team:
     return team
 
 
-def _validate_agent_ids(agent_ids: list[str], db: Session) -> None:
+def _validate_agent_ids(agent_ids: list[str], user_id: str, db: Session) -> None:
     if not agent_ids:
         return
-    found = db.query(Agent.id).filter(Agent.id.in_(agent_ids)).count()
-    if found != len(agent_ids):
+    if len(set(agent_ids)) != len(agent_ids):
+        raise HTTPException(status_code=400, detail="agent_ids contain duplicates")
+    agents = db.query(Agent).filter(Agent.id.in_(agent_ids)).all()
+    if len(agents) != len(agent_ids):
         raise HTTPException(status_code=400, detail="one or more agent_ids do not exist")
+    # Agents are per-user — a team can only use agents owned by its creator.
+    if any(a.user_id != user_id for a in agents):
+        raise HTTPException(
+            status_code=400,
+            detail="one or more agents do not belong to you — create your own agents from templates",
+        )
+    # LangGraph nodes are keyed by agent name — duplicate names would crash runs.
+    names = [a.name for a in agents]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    if dupes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"agents must have unique names within a team: {', '.join(dupes)}",
+        )
 
 
 @router.get("/teams", response_model=list[TeamOut])
@@ -31,7 +47,7 @@ def list_teams(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 @router.post("/teams", status_code=201, response_model=TeamOut)
 def create_team(payload: TeamCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    _validate_agent_ids(payload.agent_ids, db)
+    _validate_agent_ids(payload.agent_ids, user.id, db)
     team = Team(user_id=user.id, **payload.model_dump())
     db.add(team)
     db.commit()
@@ -49,7 +65,7 @@ def update_team(team_id: str, payload: TeamUpdate, db: Session = Depends(get_db)
     team = _get_owned_team(team_id, user.id, db)
     changes = payload.model_dump(exclude_unset=True)
     if "agent_ids" in changes:
-        _validate_agent_ids(changes["agent_ids"], db)
+        _validate_agent_ids(changes["agent_ids"], user.id, db)
     for field, value in changes.items():
         setattr(team, field, value)
     db.commit()

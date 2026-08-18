@@ -9,6 +9,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+    watch: { usePolling: true },
     proxy: {
       '/api': {
         target: isDocker ? 'http://backend:8000' : 'http://localhost:8000',

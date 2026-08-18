@@ -11,6 +11,7 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import TeamsPage from './pages/TeamsPage'
 import AgentsPage from './pages/AgentsPage'
+import TasksPage from './pages/TasksPage'
 import './index.css'
 
 function AppRoutes() {
@@ -48,6 +49,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <AgentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tasks"
+        element={
+          <ProtectedRoute>
+            <TasksPage />
           </ProtectedRoute>
         }
       />

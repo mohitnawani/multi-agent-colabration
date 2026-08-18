@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 from app.models.database import get_db
-from app.models.orm_models import Agent, AgentOutput, Message, Task, Team, User
+from app.models.orm_models import Agent, AgentOutput, Message, PerformanceMetric, Task, Team, User
 from app.models.schemas import TaskCreate, TaskOut, TaskResumeRequest, TaskRunRequest
 from app.services.auth.dependencies import get_current_user
 from app.services.langgraph.checkpointer import checkpointer, thread_config
@@ -39,9 +39,26 @@ def _validate_owned_team(team_id: str, user_id: str, db: Session) -> None:
 
 
 def _team_agents(team: Team, db: Session) -> list[Agent]:
-    """Load the team's agents in the order listed in team.agent_ids."""
+    """Load the team's agents in the order listed in team.agent_ids.
+
+    LangGraph nodes are keyed by agent NAME, so two agents with the same name
+    (or the same agent listed twice) would crash graph compilation with a 500.
+    """
     agents = {a.id: a for a in db.query(Agent).filter(Agent.id.in_(team.agent_ids)).all()}
-    return [agents[i] for i in team.agent_ids if i in agents]
+    # Defense-in-depth: a team may only use agents its owner created.
+    ordered = [agents[i] for i in team.agent_ids if i in agents and agents[i].user_id == team.user_id]
+    names = [a.name for a in ordered]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    if dupes:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"team has duplicate agent name(s): {', '.join(dupes)} — "
+                "each agent in a team must have a unique name (remove duplicate "
+                "agents or rename them)"
+            ),
+        )
+    return ordered
 
 
 def _build_graph(pattern: str, agents: list[Agent]):
@@ -100,6 +117,14 @@ def get_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(g
 @router.delete("/tasks/{task_id}", status_code=204)
 def delete_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _get_owned_task(task_id, user.id, db)
+    if task.status == "running":
+        # The in-flight run persists outputs/messages to this task at the end —
+        # deleting it now would make that insert fail against the FK.
+        raise HTTPException(status_code=409, detail="task is running — wait for it to finish")
+    # Child rows reference the task via FK with no cascade — delete them first.
+    for model in (AgentOutput, Message, PerformanceMetric):
+        db.query(model).filter(model.task_id == task.id).delete(synchronize_session=False)
+    _clear_thread_checkpoint(task.id)
     db.delete(task)
     db.commit()
 
@@ -183,6 +208,16 @@ def run_task(task_id: str, payload: TaskRunRequest, force: bool = False, db: Ses
         if not (force or _is_stale(task)):
             raise HTTPException(status_code=409, detail="task is already running")
         _clear_thread_checkpoint(task.id)
+    elif task.status == "awaiting_review":
+        # A pending interrupt sits in the thread checkpoint — a fresh run would
+        # silently discard the plan the human was reviewing. Require force so
+        # restarting is an explicit choice.
+        if not force:
+            raise HTTPException(
+                status_code=409,
+                detail="task is awaiting review — approve or reject it via POST /api/tasks/{id}/resume, or pass force=true to restart from scratch",
+            )
+        _clear_thread_checkpoint(task.id)
     team = db.get(Team, task.team_id)
     if team is None:
         raise HTTPException(status_code=400, detail="team not found")
@@ -202,7 +237,7 @@ def run_task(task_id: str, payload: TaskRunRequest, force: bool = False, db: Ses
         team_id=task.team_id,
         framework=task.framework,
     )
-    if payload.require_approval:
+    if payload.require_approval or task.require_approval:
         state["require_approval"] = True
     return _stream_and_finish(
         graph,
@@ -212,6 +247,9 @@ def run_task(task_id: str, payload: TaskRunRequest, force: bool = False, db: Ses
         db,
         "Task paused — approve or reject it via POST /api/tasks/{id}/resume",
     )
+
+
+
 
 
 @router.post("/tasks/{task_id}/resume")
@@ -272,41 +310,49 @@ async def stream_task(task_id: str, db: Session = Depends(get_db), user: User = 
             db.expire_all()
             db.refresh(task)
 
-        # 3) terminal phase: replay from DB, then close
+        # 3) terminal phase: replay from DB only if the hub is empty, then close
+        # The hub is cleared at every run start, so a non-empty snapshot covers
+        # the whole run — a client that received those events (live or via
+        # catch-up) already saw the terminal events too. Replaying from DB then
+        # would duplicate everything; the DB fallback exists solely for the
+        # case where the backend restarted and the in-memory hub lost the run.
+        saw_run = bool(hub.snapshot(task.id))
         if task.status == "awaiting_review":
-            if not hub.snapshot(task.id):
+            if not saw_run:
                 yield sse_format(
                     {"type": "interrupt", "detail": "task paused — awaiting approval", "timestamp": _ts()}
                 )
-            yield sse_format({"type": "paused", "detail": "reconnect after resume", "timestamp": _ts()})
+                yield sse_format({"type": "paused", "detail": "reconnect after resume", "timestamp": _ts()})
         elif task.status == "done":
-            for row in db.query(Message).filter(Message.task_id == task.id).order_by(Message.created_at).all():
+            if not saw_run:
+                for row in db.query(Message).filter(Message.task_id == task.id).order_by(Message.created_at).all():
+                    yield sse_format(
+                        {
+                            "type": "progress",
+                            "node": row.from_agent,
+                            "phase": "",
+                            "summary": (row.content or "")[:200],
+                            "timestamp": row.created_at.isoformat() if row.created_at else _ts(),
+                        }
+                    )
+                for row in db.query(AgentOutput).filter(AgentOutput.task_id == task.id).order_by(AgentOutput.created_at).all():
+                    score = row.quality_score
+                    yield sse_format(
+                        {
+                            "type": "progress",
+                            "node": row.agent_name,
+                            "phase": "",
+                            "summary": f"{row.agent_name} — quality "
+                            + (f"{score:.2f}" if score is not None else "n/a"),
+                            "timestamp": row.created_at.isoformat() if row.created_at else _ts(),
+                        }
+                    )
                 yield sse_format(
-                    {
-                        "type": "progress",
-                        "node": row.from_agent,
-                        "phase": "",
-                        "summary": (row.content or "")[:200],
-                        "timestamp": row.created_at.isoformat() if row.created_at else _ts(),
-                    }
+                    {"type": "done", "final_output": task.final_output or "", "timestamp": _ts()}
                 )
-            for row in db.query(AgentOutput).filter(AgentOutput.task_id == task.id).order_by(AgentOutput.created_at).all():
-                score = row.quality_score
-                yield sse_format(
-                    {
-                        "type": "progress",
-                        "node": row.agent_name,
-                        "phase": "",
-                        "summary": f"{row.agent_name} — quality "
-                        + (f"{score:.2f}" if score is not None else "n/a"),
-                        "timestamp": row.created_at.isoformat() if row.created_at else _ts(),
-                    }
-                )
-            yield sse_format(
-                {"type": "done", "final_output": task.final_output or "", "timestamp": _ts()}
-            )
         elif task.status == "failed":
-            yield sse_format({"type": "error", "detail": "task failed", "timestamp": _ts()})
+            if not saw_run:
+                yield sse_format({"type": "error", "detail": "task failed", "timestamp": _ts()})
         else:
             yield sse_format({"type": "idle", "detail": "task has not run yet", "timestamp": _ts()})
         yield "event: end\ndata: {}\n\n"
