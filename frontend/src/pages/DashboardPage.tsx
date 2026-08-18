@@ -1,6 +1,7 @@
 import { useDispatch, useSelector } from 'react-redux'
 import { useNavigate } from 'react-router'
 import { logout } from '../features/auth/authSlice'
+import { Link } from 'react-router'
 import type { RootState, AppDispatch } from '../store'
 
 export default function DashboardPage() {
@@ -34,9 +35,9 @@ export default function DashboardPage() {
         </div>
         <div className="navbar-center hidden lg:flex">
           <ul className="menu menu-horizontal px-1">
-            <li><a className="btn btn-ghost active">Dashboard</a></li>
-            <li><a className="btn btn-ghost">Teams</a></li>
-            <li><a className="btn btn-ghost">Agents</a></li>
+            <li><Link to="/dashboard" className="btn btn-ghost active">Dashboard</Link></li>
+            <li><Link to="/teams" className="btn btn-ghost">Teams</Link></li>
+            <li><Link to="/agents" className="btn btn-ghost">Agents</Link></li>
             <li><a className="btn btn-ghost">Tasks</a></li>
           </ul>
         </div>
@@ -54,7 +55,7 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-base-content mb-8">Dashboard</h1>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="card bg-base-100 border border-base-300">
+            <Link to="/teams" className="card bg-base-100 border border-base-300 hover:shadow-lg transition-shadow no-underline">
               <div className="card-body">
                 <h2 className="card-title text-base-content">Teams</h2>
                 <p className="text-4xl font-bold text-primary">0</p>
@@ -63,9 +64,9 @@ export default function DashboardPage() {
                   <button className="btn btn-primary">Create Team</button>
                 </div>
               </div>
-            </div>
+            </Link>
             
-            <div className="card bg-base-100 border border-base-300">
+            <Link to="/agents" className="card bg-base-100 border border-base-300 hover:shadow-lg transition-shadow no-underline">
               <div className="card-body">
                 <h2 className="card-title text-base-content">Agents</h2>
                 <p className="text-4xl font-bold text-secondary">0</p>
@@ -74,7 +75,7 @@ export default function DashboardPage() {
                   <button className="btn btn-secondary">Add Agent</button>
                 </div>
               </div>
-            </div>
+            </Link>
             
             <div className="card bg-base-100 border border-base-300">
               <div className="card-body">
@@ -93,8 +94,8 @@ export default function DashboardPage() {
               <h2 className="card-title text-base-content">Quick Start</h2>
               <p className="text-base-content/70 mb-4">Get started by creating your first team and adding agents.</p>
               <div className="flex gap-4">
-                <button className="btn btn-primary">Create Team</button>
-                <button className="btn btn-outline">View Documentation</button>
+                <Link to="/teams" className="btn btn-primary">Create Team</Link>
+                <Link to="/agents" className="btn btn-outline">Create Agent</Link>
               </div>
             </div>
           </div>

@@ -9,6 +9,8 @@ import { ProtectedRoute } from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
+import TeamsPage from './pages/TeamsPage'
+import AgentsPage from './pages/AgentsPage'
 import './index.css'
 
 function AppRoutes() {
@@ -30,6 +32,22 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/teams"
+        element={
+          <ProtectedRoute>
+            <TeamsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/agents"
+        element={
+          <ProtectedRoute>
+            <AgentsPage />
           </ProtectedRoute>
         }
       />
