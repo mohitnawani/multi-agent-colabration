@@ -45,10 +45,11 @@ class Task(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     team_id = Column(String, ForeignKey("teams.id"))
     description = Column(Text)
-    status = Column(String, default="pending")  # pending/running/done/failed
+    status = Column(String, default="pending")  # pending/running/done/failed/awaiting_review
     final_output = Column(Text, nullable=True)
     framework = Column(String, default="langgraph")
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     owner = relationship("User", back_populates="tasks")
 

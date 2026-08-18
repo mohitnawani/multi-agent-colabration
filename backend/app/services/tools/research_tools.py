@@ -16,7 +16,7 @@ from app.config import settings
 
 
 @tool
-def web_search(query: str, max_results: int = 5) -> str:
+def web_search(query: str, max_results: int = 3) -> str:
     """Search the web via Tavily. Returns formatted, human-readable results."""
     if not settings.tavily_api_key:
         return "[web_search disabled: TAVILY_API_KEY not set in .env]"
@@ -35,7 +35,7 @@ def web_search(query: str, max_results: int = 5) -> str:
 
     lines = []
     for r in results:
-        lines.append(f"- {r.get('title')}\n  {r.get('url')}\n  {r.get('content', '')[:300]}")
+        lines.append(f"- {r.get('title')}\n  {r.get('url')}\n  {r.get('content', '')[:200]}")
     return "\n".join(lines)
 
 

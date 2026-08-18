@@ -39,11 +39,21 @@ def _retry_delay_seconds(msg: str) -> float | None:
     return None
 
 
+# Spread consecutive LLM calls so they don't all land in the same 60s
+# tokens-per-minute window (Groq free tier: gpt-oss-20b = 8,000 TPM;
+# a full agent run uses ~8-10 calls x ~850 tokens).
+PACING_SECONDS = 7.0
+
+# Fixed wait for a tokens-per-minute reset (the window is 60s rolling).
+TPM_RESET_SECONDS = 65.0
+
+
 def _classify_error(exc: Exception) -> str:
-    """Classify an exception as 'quota_exhausted', 'transient', or 'other'.
+    """Classify an exception as 'quota_exhausted', 'tpm_limit', 'transient', or 'other'.
 
     'quota_exhausted' = a real daily/zero quota wall (limit: 0, or the
         server suggests retrying in hours) — retrying won't help.
+    'tpm_limit' = tokens-per-minute cap (413) — a 60-65s wait resets it.
     'transient' = ordinary rate burst (429 with a short retry delay) or a
         503 — worth a backoff retry.
 
@@ -54,6 +64,9 @@ def _classify_error(exc: Exception) -> str:
 
     if "503" in msg:
         return "transient"
+
+    if "413" in msg and ("tokens per minute" in msg or "TPM" in msg):
+        return "tpm_limit"
 
     if "429" in msg:
         if "limit: 0" in msg:
@@ -84,7 +97,9 @@ def invoke_with_retry(
 
     for attempt in range(max_attempts):
         try:
-            return chain.invoke(input)
+            result = chain.invoke(input)
+            time.sleep(PACING_SECONDS)
+            return result
         except Exception as exc:
             last_exc = exc
             kind = _classify_error(exc)
@@ -92,6 +107,14 @@ def invoke_with_retry(
             if kind == "quota_exhausted":
                 logger.error("LLM quota exhausted, not retrying: %s", exc)
                 raise
+
+            if kind == "tpm_limit" and attempt < max_attempts - 1:
+                logger.warning(
+                    "TPM cap hit on attempt %d/%d, waiting %.0fs for window reset: %s",
+                    attempt + 1, max_attempts, TPM_RESET_SECONDS, exc,
+                )
+                time.sleep(TPM_RESET_SECONDS)
+                continue
 
             if kind == "transient" and attempt < max_attempts - 1:
                 delay = min(base_delay * (2 ** attempt), max_delay)

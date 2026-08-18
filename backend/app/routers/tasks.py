@@ -19,6 +19,11 @@ router = APIRouter()
 # chunk {'__interrupt__': (...)} — not an exception.
 INTERRUPT_KEY = "__interrupt__"
 
+# A run stuck in "running" for longer than this is treated as stale (e.g. the
+# client cancelled the request but the backend kept executing, or the process
+# restarted mid-run) — a new run may take over automatically.
+STALE_RUN_MINUTES = 5
+
 
 def _get_owned_task(task_id: str, user_id: str, db: Session) -> Task:
     task = db.get(Task, task_id)
@@ -150,11 +155,34 @@ def _stream_and_finish(graph, input, config, task: Task, db: Session, paused_det
     }
 
 
+def _is_stale(task: Task) -> bool:
+    """True if the task has been 'running' far longer than a run can take."""
+    from datetime import datetime, timedelta
+
+    if not task.updated_at:
+        return True
+    return datetime.utcnow() - task.updated_at > timedelta(minutes=STALE_RUN_MINUTES)
+
+
+def _clear_thread_checkpoint(task_id: str) -> None:
+    """Drop any lingering graph checkpoint for this task's thread.
+
+    Called when a stale/forced run takes over, so the old run's saved state
+    can't collide with the fresh one.
+    """
+    try:
+        checkpointer.delete_thread(thread_config(task.id)["configurable"]["thread_id"])
+    except Exception:
+        pass  # nothing persisted yet — fine
+
+
 @router.post("/tasks/{task_id}/run")
-def run_task(task_id: str, payload: TaskRunRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def run_task(task_id: str, payload: TaskRunRequest, force: bool = False, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _get_owned_task(task_id, user.id, db)
     if task.status == "running":
-        raise HTTPException(status_code=409, detail="task is already running")
+        if not (force or _is_stale(task)):
+            raise HTTPException(status_code=409, detail="task is already running")
+        _clear_thread_checkpoint(task.id)
     team = db.get(Team, task.team_id)
     if team is None:
         raise HTTPException(status_code=400, detail="team not found")
