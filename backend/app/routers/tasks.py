@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
+import traceback
 from langgraph.types import Command
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 from app.models.database import get_db
 from app.models.orm_models import Agent, AgentOutput, Message, PerformanceMetric, Task, Team, User
-from app.models.schemas import TaskCreate, TaskOut, TaskResumeRequest, TaskRunRequest
+from app.models.schemas import AgentOutputOut, TaskCreate, TaskOut, TaskResumeRequest, TaskRunRequest
 from app.services.auth.dependencies import get_current_user
 from app.services.langgraph.checkpointer import checkpointer, thread_config
 from app.services.langgraph.patterns import build_debate_graph, build_parallel_graph, build_sequential_graph
@@ -14,6 +16,8 @@ from app.services.langgraph.supervisor import build_supervisor_graph
 from app.services.streaming import hub, make_event, sse_format
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 # langgraph 1.x: with stream_mode="updates" an interrupt surfaces as its own
 # chunk {'__interrupt__': (...)} — not an exception.
@@ -114,6 +118,23 @@ def get_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(g
     return _get_owned_task(task_id, user.id, db)
 
 
+@router.get("/tasks/{task_id}/outputs", response_model=list[AgentOutputOut])
+def task_outputs(task_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Per-agent answers for a finished task (Researcher, Writer, …).
+
+    The run endpoint persists one AgentOutput row per agent submission;
+    this is what lets the UI show each agent's own answer alongside the
+    synthesized final output.
+    """
+    _get_owned_task(task_id, user.id, db)
+    return (
+        db.query(AgentOutput)
+        .filter(AgentOutput.task_id == task_id)
+        .order_by(AgentOutput.created_at.asc())
+        .all()
+    )
+
+
 @router.delete("/tasks/{task_id}", status_code=204)
 def delete_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _get_owned_task(task_id, user.id, db)
@@ -158,7 +179,8 @@ def _stream_and_finish(graph, input, config, task: Task, db: Session, paused_det
             for node, update in chunk.items():
                 hub.emit(task.id, make_event(node, update))
     except Exception as exc:
-        hub.emit(task.id, {"type": "error", "detail": str(exc)[:200], "timestamp": _ts()})
+        logger.exception("task %s failed during graph run", task.id)
+        hub.emit(task.id, {"type": "error", "detail": f"{traceback.format_exc()[:1000]}", "timestamp": _ts()})
         task.status = "failed"
         db.commit()
         raise HTTPException(status_code=500, detail=f"task execution failed: {str(exc)[:400]}")
@@ -202,7 +224,7 @@ def _clear_thread_checkpoint(task_id: str) -> None:
 
 
 @router.post("/tasks/{task_id}/run")
-def run_task(task_id: str, payload: TaskRunRequest, force: bool = False, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def run_task(task_id: str, payload: TaskRunRequest, force: bool = False, db: Session = Depends(get_db), user: User = Depends(get_current_user)):    
     task = _get_owned_task(task_id, user.id, db)
     if task.status == "running":
         if not (force or _is_stale(task)):

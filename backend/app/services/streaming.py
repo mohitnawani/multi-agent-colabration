@@ -55,10 +55,21 @@ def make_event(node: str, update: dict) -> dict:
     """Build a compact progress event from one node's state update.
 
     `update` is what the node returned (stream_mode="updates" chunk value).
+    Some node types return non-dict values (e.g. a tool node yielding raw
+    message lists) — never let that crash the run: degrade to a plain event.
     """
+    if not isinstance(update, dict):
+        return {
+            "type": "progress",
+            "node": node,
+            "phase": "",
+            "summary": str(update)[:200],
+            "timestamp": _now(),
+        }
+
     summary = ""
     messages = update.get("messages") or []
-    if messages:
+    if messages and isinstance(messages[-1], dict):
         summary = (messages[-1].get("content") or "")[:200]
     elif update.get("agent_outputs"):
         name, out = next(iter(update["agent_outputs"].items()))

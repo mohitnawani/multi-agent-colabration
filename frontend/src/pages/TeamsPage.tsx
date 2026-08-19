@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -7,9 +7,24 @@ import { Link } from 'react-router'
 import { listTeams, createTeam, deleteTeam } from '../features/teams/teamsSlice'
 import { listAgents } from '../features/agents/agentsSlice'
 import type { RootState, AppDispatch } from '../store'
+import { AppNavbar } from '../components/AppNavbar'
+import { PageHeader } from '../components/PageHeader'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { AgentAvatar } from '../components/AgentAvatar'
+import { RoleBadge } from '../components/RoleBadge'
+import { TableSkeleton } from '../components/Skeleton'
+import { Modal } from '../components/ui/modal'
+import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
+import { useNotify } from '../components/ui/use-notify'
+import { cn } from '../lib/cn'
 
 const createTeamSchema = z.object({
-  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Name must be at least 2 characters')
+    .max(50, 'Name must be at most 50 characters'),
   pattern: z.enum(['sequential', 'parallel', 'debate', 'supervisor']),
   agent_ids: z.array(z.string()).min(1, 'Select at least one agent'),
 })
@@ -17,17 +32,10 @@ const createTeamSchema = z.object({
 type CreateTeamFormData = z.infer<typeof createTeamSchema>
 
 const PATTERN_LABELS: Record<string, string> = {
-  sequential: 'Sequential — assembly line, one after another',
-  parallel: 'Parallel — all agents work simultaneously, then synthesis',
-  debate: 'Debate — agents argue for/against, judge picks winner',
-  supervisor: 'Supervisor — lead agent coordinates workers',
-}
-
-const PATTERN_COLORS: Record<string, string> = {
-  sequential: 'badge-primary',
-  parallel: 'badge-secondary',
-  debate: 'badge-accent',
-  supervisor: 'badge-warning',
+  sequential: 'Sequential â€” assembly line, one after another',
+  parallel: 'Parallel â€” all agents work simultaneously, then synthesis',
+  debate: 'Debate â€” agents argue for/against, judge picks winner',
+  supervisor: 'Supervisor â€” lead agent coordinates workers',
 }
 
 export default function TeamsPage() {
@@ -36,6 +44,10 @@ export default function TeamsPage() {
   const { agents, loading: agentsLoading } = useSelector((state: RootState) => state.agents)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletingName, setDeletingName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const notify = useNotify()
 
   const {
     register,
@@ -55,20 +67,36 @@ export default function TeamsPage() {
     dispatch(listAgents())
   }, [dispatch])
 
-  const onSubmit = (data: CreateTeamFormData) => {
-    dispatch(createTeam(data)).then(() => {
+  const onSubmit = async (data: CreateTeamFormData) => {
+    setSubmitting(true)
+    try {
+      await dispatch(createTeam(data)).unwrap()
       reset({ name: '', pattern: 'sequential', agent_ids: [] })
       setShowCreateModal(false)
-    })
+      notify.success('Team created')
+    } catch (err) {
+      notify.error(typeof err === 'string' ? `Couldn't create the team â€” ${err}` : "Couldn't create the team")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setDeletingId(id)
+  const handleDelete = (team: { id: string; name: string }) => {
+    setDeletingId(team.id)
+    setDeletingName(team.name)
   }
 
-  const confirmDelete = (id: string) => {
-    dispatch(deleteTeam(id))
-    setDeletingId(null)
+  const confirmDelete = async (id: string) => {
+    setDeleting(true)
+    try {
+      await dispatch(deleteTeam(id)).unwrap()
+      notify.success('Team deleted')
+    } catch (err) {
+      notify.error(typeof err === 'string' ? `Couldn't delete the team â€” ${err}` : "Couldn't delete the team")
+    } finally {
+      setDeleting(false)
+      setDeletingId(null)
+    }
   }
 
   const getAgentNames = (agentIds: string[]) => {
@@ -79,61 +107,66 @@ export default function TeamsPage() {
   }
 
   const isSubmitting = teamsLoading || agentsLoading
+  const openCreate = () => {
+    reset({ name: '', pattern: 'sequential', agent_ids: [] })
+    setShowCreateModal(true)
+  }
 
   return (
-    <div className="min-h-screen bg-base-100">
-      <nav className="navbar bg-base-100 border-b border-base-300">
-        <div className="navbar-start">
-          <Link to="/dashboard" className="btn btn-ghost text-xl font-bold">Multi-Agent Collaboration</Link>
-        </div>
-        <div className="navbar-center hidden lg:flex">
-          <ul className="menu menu-horizontal px-1">
-            <li><Link to="/dashboard" className="btn btn-ghost">Dashboard</Link></li>
-            <li><Link to="/teams" className="btn btn-ghost active">Teams</Link></li>
-            <li><Link to="/agents" className="btn btn-ghost">Agents</Link></li>
-            <li><Link to="/tasks" className="btn btn-ghost">Tasks</Link></li>
-          </ul>
-        </div>
-      </nav>
+    <div className="min-h-dvh bg-base-200">
+      <AppNavbar active="teams" />
 
-      <main className="p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-base-content">Teams</h1>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              disabled={agents.length === 0}
-              className="btn btn-primary gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Create Team
-            </button>
-          </div>
+      <main className="px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-6xl page-enter">
+          <PageHeader
+            title="Teams"
+            subtitle="Group agents into collaboration patterns, then run tasks against them."
+            actions={
+              <Button onClick={openCreate} disabled={agents.length === 0} title={agents.length === 0 ? 'Create agents first' : undefined}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                Create Team
+              </Button>
+            }
+          />
 
           {teamsError && (
-            <div className="alert alert-error mb-6" role="alert">
-              <span>{teamsError}</span>
+            <div className="mb-6 flex items-start gap-2.5 rounded-field bg-lamp-failed/10 px-4 py-3 text-sm text-lamp-failed ring-1 ring-inset ring-lamp-failed/25" role="alert">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+              {teamsError}
             </div>
           )}
 
-          {teams.length === 0 && !isSubmitting && (
-            <div className="card bg-base-100 border border-base-300 text-center py-12">
-              <p className="text-base-content/60 mb-4">
-                No teams yet. {agents.length === 0 ? 'Create agents first, then build a team.' : 'Create your first team.'}
-              </p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                disabled={agents.length === 0}
-                className="btn btn-primary"
-              >
-                {agents.length === 0 ? 'Create Agents First' : 'Create Team'}
-              </button>
+          {isSubmitting && teams.length === 0 && !teamsError ? (
+            <TableSkeleton rows={3} cols={4} />
+          ) : teams.length === 0 ? (
+            <div className="surface">
+              {agents.length === 0 ? (
+                <EmptyState
+                  title="Teams are built from agents"
+                  description={
+                    <>
+                      Create a researcher or a critic first â€” then assemble agents into a team
+                      under a collaboration pattern. Start on the{' '}
+                      <Link to="/agents" className="font-semibold text-ink underline underline-offset-4">Agents</Link> page.
+                    </>
+                  }
+                >
+                  <Link to="/agents">
+                    <Button>Create Agent</Button>
+                  </Link>
+                </EmptyState>
+              ) : (
+                <EmptyState
+                  title="No teams yet"
+                  description="Pick a collaboration pattern and choose which agents work together. A task runs against a team, not a single agent."
+                >
+                  <Button onClick={openCreate}>Create Team</Button>
+                </EmptyState>
+              )}
             </div>
-          )}
-
-          {teams.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="table table-zebra w-full">
+          ) : (
+            <div className="surface overflow-x-auto">
+              <table className="table w-full">
                 <thead>
                   <tr>
                     <th>Name</th>
@@ -145,22 +178,25 @@ export default function TeamsPage() {
                 </thead>
                 <tbody>
                   {teams.map((team) => (
-                    <tr key={team.id}>
-                      <td className="font-medium text-base-content">{team.name}</td>
+                    <tr key={team.id} className="transition-colors hover:bg-console/70">
+                      <td className="font-semibold text-ink">{team.name}</td>
                       <td>
-                        <span className={`badge ${PATTERN_COLORS[team.pattern || 'sequential']}`}>
+                        <span className="inline-flex items-center rounded-full bg-ink/5 px-2 py-0.5 text-xs font-semibold text-ink-muted ring-1 ring-inset ring-line" title={PATTERN_LABELS[team.pattern || 'sequential']}>
                           {team.pattern || 'sequential'}
                         </span>
                       </td>
-                      <td className="max-w-xs truncate text-base-content/70">{getAgentNames(team.agent_ids)}</td>
-                      <td className="text-base-content/50 text-sm">{new Date(team.created_at).toLocaleDateString()}</td>
+                      <td className="max-w-xs truncate text-ink-muted">{getAgentNames(team.agent_ids)}</td>
+                      <td className="font-mono text-xs text-ink-muted/80 tabular">
+                        {new Date(team.created_at).toLocaleDateString()}
+                      </td>
                       <td className="text-right">
                         <button
-                          onClick={() => handleDelete(team.id)}
-                          className="btn btn-ghost btn-sm btn-circle text-error hover:bg-error/10"
-                          aria-label="Delete team"
+                          onClick={() => handleDelete(team)}
+                          className="grid size-8 place-items-center rounded-field text-ink-muted transition-colors hover:bg-lamp-failed/10 hover:text-lamp-failed"
+                          aria-label={`Delete team ${team.name}`}
+                          title="Delete team"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                         </button>
                       </td>
                     </tr>
@@ -172,105 +208,128 @@ export default function TeamsPage() {
         </div>
       </main>
 
-      {/* Modals */}
-      <>
-        {/* Create Team Modal */}
-        <input type="checkbox" id="create-team-modal" className="modal-toggle" checked={showCreateModal} onChange={() => setShowCreateModal(false)} />
-        <div className="modal">
-          <div className="modal-box max-w-md">
-            <h3 className="font-bold text-xl mb-4">Create Team</h3>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text text-base-content">Team Name</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="Research Team"
-                  className="input input-bordered w-full"
-                  {...register('name')}
-                />
-                {errors.name && (
-                  <label className="label text-error">
-                    <span className="label-text-alt">{errors.name.message}</span>
-                  </label>
-                )}
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text text-base-content">Collaboration Pattern</span>
-                </label>
-                <select
-                  {...register('pattern')}
-                  className="select select-bordered w-full max-w-xs"
-                >
-                  <option value="sequential">Sequential</option>
-                  <option value="parallel">Parallel</option>
-                  <option value="debate">Debate</option>
-                  <option value="supervisor">Supervisor</option>
-                </select>
-                <p className="label-text-alt text-base-content/60">
-                  {PATTERN_LABELS[watch('pattern') || 'sequential']}
-                </p>
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text text-base-content">Agents ({selectedAgentIds.length} selected)</span>
-                </label>
-                {agents.length === 0 ? (
-                  <p className="text-base-content/50 text-sm">Create agents first on the Agents page.</p>
-                ) : (
-                  <div className="space-y-2 max-h-64 overflow-y-auto border border-base-300 rounded p-3">
-                    {agents.map((agent) => (
-                      <label key={agent.id} className="label cursor-pointer justify-start gap-2 hover:bg-base-200 rounded p-2 transition-colors">
-                        <input
-                          type="checkbox"
-                          value={agent.id}
-                          {...register('agent_ids')}
-                          className="checkbox checkbox-primary"
-                        />
-                        <span className="text-base-content">{agent.name}</span>
-                        {agent.role && <span className="badge badge-sm badge-outline">{agent.role}</span>}
-                      </label>
-                    ))}
-                  </div>
-                )}
-                {errors.agent_ids && (
-                  <label className="label text-error">
-                    <span className="label-text-alt">{errors.agent_ids.message}</span>
-                  </label>
-                )}
-              </div>
-
-              <div className="modal-action">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="submit" disabled={isSubmitting || agents.length === 0} className="btn btn-primary">
-                  {isSubmitting ? 'Creating…' : 'Create Team'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        {/* Delete Confirm Modal */}
-        {deletingId && (
+      {/* Create team */}
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create team"
+        description="Pick a pattern and the agents that will work together."
+        footer={
           <>
-            <input type="checkbox" id="delete-team-modal" className="modal-toggle" checked={true} />
-            <div className="modal">
-              <div className="modal-box max-w-sm">
-                <h3 className="font-bold text-lg mb-3">Delete Team?</h3>
-                <p className="text-base-content/70 mb-4">This action cannot be undone.</p>
-                <div className="modal-action">
-                  <button type="button" className="btn btn-ghost" onClick={() => setDeletingId(null)}>Cancel</button>
-                  <button type="button" className="btn btn-error" onClick={() => confirmDelete(deletingId)}>Delete</button>
-                </div>
-              </div>
-            </div>
+            <Button variant="ghost" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            <Button
+              type="submit"
+              form="create-team-form"
+              disabled={submitting || agents.length === 0}
+            >
+              {submitting ? 'Creatingâ€¦' : 'Create team'}
+            </Button>
           </>
-        )}
-      </>
+        }
+      >
+        <form id="create-team-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="team-name">
+              Team name
+            </label>
+            <input
+              id="team-name"
+              type="text"
+              placeholder="Research Team"
+              className={cn(
+                'h-10 w-full rounded-field border bg-base-100 px-3.5 text-sm text-ink placeholder:text-ink-muted/60',
+                'focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                errors.name ? 'border-lamp-failed' : 'border-line',
+              )}
+              {...register('name')}
+            />
+            {errors.name && <p className="mt-1.5 text-xs text-lamp-failed" role="alert">{errors.name.message}</p>}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="team-pattern">
+              Collaboration pattern
+            </label>
+            <select
+              id="team-pattern"
+              className={cn(
+                'h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+              )}
+              {...register('pattern')}
+            >
+              <option value="sequential">Sequential</option>
+              <option value="parallel">Parallel</option>
+              <option value="debate">Debate</option>
+              <option value="supervisor">Supervisor</option>
+            </select>
+            <p className="mt-1.5 text-xs text-ink-muted">
+              {PATTERN_LABELS[watch('pattern') || 'sequential']}
+            </p>
+          </div>
+
+          <div>
+            <p className="mb-1.5 text-sm font-semibold text-ink">
+              Agents ({selectedAgentIds.length} selected)
+            </p>
+            {agents.length === 0 ? (
+              <p className="text-sm text-ink-muted">
+                Create agents first on the <Link to="/agents" className="font-semibold text-ink underline underline-offset-4">Agents</Link> page.
+              </p>
+            ) : (
+              <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-field border border-line p-1.5">
+                {agents.map((agent) => (
+                  <label
+                    key={agent.id}
+                    className="flex cursor-pointer items-center gap-3 rounded-field px-2 py-1.5 transition-colors hover:bg-console"
+                  >
+                    <span className="relative inline-flex shrink-0">
+                      <input
+                        type="checkbox"
+                        value={agent.id}
+                        className="peer size-4 appearance-none rounded-[4px] border border-line bg-base-100 transition-colors checked:border-ink checked:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                        {...register('agent_ids')}
+                      />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-0 m-auto text-primary-content opacity-0 transition-opacity peer-checked:opacity-100"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                    <AgentAvatar name={agent.name} className="size-7 text-[10px]" />
+                    <span className="flex-1 text-sm font-medium text-ink">{agent.name}</span>
+                    {agent.role && <RoleBadge role={agent.role} />}
+                  </label>
+                ))}
+              </div>
+            )}
+            {errors.agent_ids && <p className="mt-1.5 text-xs text-lamp-failed" role="alert">{errors.agent_ids.message}</p>}
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deletingId}
+        title="Delete team?"
+        description={
+          <>
+            <strong>{deletingName}</strong> will be removed. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete team"
+        busy={deleting}
+        onConfirm={() => deletingId && confirmDelete(deletingId)}
+        onClose={() => !deleting && setDeletingId(null)}
+      />
     </div>
   )
 }

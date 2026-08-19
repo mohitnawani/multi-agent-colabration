@@ -6,12 +6,13 @@ import { checkAuth } from './features/auth/authSlice'
 import { useDispatch, useSelector } from 'react-redux'
 import type { RootState, AppDispatch } from './store'
 import { ProtectedRoute } from './components/ProtectedRoute'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
+import LoginPage from './routes/login'
+import RegisterPage from './routes/register'
 import DashboardPage from './pages/DashboardPage'
 import TeamsPage from './pages/TeamsPage'
 import AgentsPage from './pages/AgentsPage'
 import TasksPage from './pages/TasksPage'
+import { Toaster } from './components/ui/toast'
 import './index.css'
 
 function AppRoutes() {
@@ -71,6 +72,7 @@ export default function App() {
     <Provider store={store}>
       <BrowserRouter>
         <AppRoutes />
+        <Toaster />
       </BrowserRouter>
     </Provider>
   )

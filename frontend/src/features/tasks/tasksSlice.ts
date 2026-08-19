@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, type PayloadAction } from '@reduxjs/toolkit'
 import api from '../../lib/api'
-import type { CreateTaskPayload, Task, RunResult, ResumeTaskPayload } from '../../types'
+import type { AgentOutput, CreateTaskPayload, Task, RunResult, ResumeTaskPayload } from '../../types'
 
 // A real agent run makes many paced LLM calls (7s apart) and can take a
 // couple of minutes — far beyond the default 30s axios timeout.
@@ -12,6 +12,9 @@ interface TasksState {
   error: string | null
   runningTaskId: string | null
   runResult: RunResult | null
+  outputs: AgentOutput[] | null
+  outputsLoading: boolean
+  outputsError: string | null
 }
 
 const initialState: TasksState = {
@@ -20,6 +23,9 @@ const initialState: TasksState = {
   error: null,
   runningTaskId: null,
   runResult: null,
+  outputs: null,
+  outputsLoading: false,
+  outputsError: null,
 }
 
 export const listTasks = createAsyncThunk(
@@ -79,6 +85,18 @@ export const deleteTask = createAsyncThunk(
       return id
     } catch (err: any) {
       return rejectWithValue(err.response?.data?.detail || 'Failed to delete task')
+    }
+  },
+)
+
+export const fetchTaskOutputs = createAsyncThunk(
+  'tasks/fetchTaskOutputs',
+  async (taskId: string, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/tasks/${taskId}/outputs`)
+      return { taskId, outputs: res.data as AgentOutput[] }
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.detail || 'Failed to load agent outputs')
     }
   },
 )
@@ -169,6 +187,18 @@ const tasksSlice = createSlice({
       .addCase(deleteTask.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload as string
+      })
+      .addCase(fetchTaskOutputs.pending, (state) => {
+        state.outputsLoading = true
+        state.outputsError = null
+      })
+      .addCase(fetchTaskOutputs.fulfilled, (state, action: PayloadAction<{ taskId: string; outputs: AgentOutput[] }>) => {
+        state.outputsLoading = false
+        state.outputs = action.payload.outputs
+      })
+      .addCase(fetchTaskOutputs.rejected, (state, action) => {
+        state.outputsLoading = false
+        state.outputsError = action.payload as string
       })
   },
 })

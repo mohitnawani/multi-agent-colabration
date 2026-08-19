@@ -1,50 +1,353 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap');
 @import "tailwindcss";
+
+/* daisyUI theme set — light (console) is the default; dark (control room) is defined
+   for instrument panels and future toggle support. */
 @plugin "daisyui" {
   themes: light --default, dark;
 }
+
+/* dark: variant follows the app's data-theme attribute (toggle-driven, not OS-only) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Light — "the dispatcher's desk": bright work surface, signal-lamp status colors.
+   Primary is INK, not a status hue — status colors are reserved for actual state. */
 @plugin "daisyui/theme" {
   name: "light";
-  --color-primary: #2563eb;
+  --color-primary: #141b26;
   --color-primary-content: #ffffff;
-  --color-secondary: #64748b;
+  --color-secondary: #5c6675;
   --color-secondary-content: #ffffff;
-  --color-accent: #0d9488;
+  --color-accent: #2e5ba6;
   --color-accent-content: #ffffff;
-  --color-base-100: #f8fafc;
-  --color-base-200: #f1f5f9;
-  --color-base-300: #e2e8f0;
-  --color-base-content: #1e293b;
-  --color-neutral: #64748b;
+  --color-base-100: #ffffff; /* sheet — cards, tables, modals */
+  --color-base-200: #eef1f5; /* console — page canvas */
+  --color-base-300: #d8dee7; /* line — hairlines, borders */
+  --color-base-content: #141b26;
+  --color-neutral: #5c6675;
   --color-neutral-content: #ffffff;
-  --color-info: #0ea5e9;
+  --color-info: #2e5ba6;    /* idle / pending signal */
   --color-info-content: #ffffff;
-  --color-success: #22c55e;
+  --color-success: #157a4b; /* succeeded signal */
   --color-success-content: #ffffff;
-  --color-warning: #f59e0b;
+  --color-warning: #a85b00; /* running signal */
   --color-warning-content: #ffffff;
-  --color-error: #ef4444;
+  --color-error: #b42318;   /* failed signal */
   --color-error-content: #ffffff;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
 }
+
+/* Dark — the control room. Only used behind the signature schematic and for
+   future data-theme="dark" support. */
 @plugin "daisyui/theme" {
   name: "dark";
-  --color-primary: #3b82f6;
-  --color-primary-content: #ffffff;
-  --color-secondary: #94a3b8;
-  --color-secondary-content: #ffffff;
-  --color-accent: #14b8a6;
-  --color-accent-content: #ffffff;
-  --color-base-100: #0f172a;
-  --color-base-200: #1e293b;
-  --color-base-300: #334155;
-  --color-base-content: #f1f5f9;
-  --color-neutral: #94a3b8;
-  --color-neutral-content: #ffffff;
-  --color-info: #38bdf8;
-  --color-info-content: #ffffff;
-  --color-success: #4ade80;
-  --color-success-content: #ffffff;
-  --color-warning: #fbbf24;
-  --color-warning-content: #ffffff;
-  --color-error: #f87171;
-  --color-error-content: #ffffff;
+  --color-primary: #e8ecf3;
+  --color-primary-content: #10151f;
+  --color-secondary: #93a0b3;
+  --color-secondary-content: #10151f;
+  --color-accent: #7fa6e8;
+  --color-accent-content: #10151f;
+  --color-base-100: #171e2b; /* panel */
+  --color-base-200: #10151f; /* canvas */
+  --color-base-300: #232c3d; /* line */
+  --color-base-content: #e8ecf3;
+  --color-neutral: #93a0b3;
+  --color-neutral-content: #10151f;
+  --color-info: #7fa6e8;
+  --color-info-content: #10151f;
+  --color-success: #4bbf8a;
+  --color-success-content: #10151f;
+  --color-warning: #e0a32e;
+  --color-warning-content: #10151f;
+  --color-error: #ff8a80;
+  --color-error-content: #10151f;
+  --radius-selector: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
+}
+
+/* Design tokens (Tailwind v4 @theme) — every color, face and scale the UI uses */
+@theme {
+  --font-sans: "Fira Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Palette */
+  --color-ink: #141b26;
+  --color-ink-muted: #5c6675;
+  --color-console: #eef1f5;
+  --color-sheet: #ffffff;
+  --color-line: #d8dee7;
+
+  /* Signal lamps — every hue names an orchestration state */
+  --color-lamp-idle: #2e5ba6;
+  --color-lamp-running: #a85b00;
+  --color-lamp-done: #157a4b;
+  --color-lamp-failed: #b42318;
+  --color-lamp-review: #6d4ac4;
+
+  /* Control room — dark instrument panel (signature only) */
+  --color-panel: #10151f;
+  --color-panel-2: #171e2b;
+  --color-panel-line: #232c3d;
+  --color-panel-text: #e8ecf3;
+  --color-panel-muted: #93a0b3;
+
+  /* Role identity hues (light) */
+  --color-role-blue: #2e5ba6;
+  --color-role-green: #157a4b;
+  --color-role-slate: #5c6675;
+  --color-role-violet: #6d4ac4;
+  --color-role-teal: #0f766e;
+  --color-role-rose: #be3a6b;
+
+  /* Role identity hues (dark) */
+  --color-role-blue-dark: #9db9e8;
+  --color-role-green-dark: #7fd4ab;
+  --color-role-slate-dark: #b6c0cf;
+  --color-role-violet-dark: #b9a3f2;
+  --color-role-teal-dark: #5fd0c7;
+  --color-role-rose-dark: #f09bb6;
+
+  /* Type scale */
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.3;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.45;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.25;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 1.2;
+
+}
+
+/* Stacking scale (v4 has no --z-* theme namespace) */
+@utility z-dropdown {
+  z-index: 1000;
+}
+@utility z-sticky {
+  z-index: 1100;
+}
+@utility z-modal {
+  z-index: 1200;
+}
+@utility z-popover {
+  z-index: 1300;
+}
+
+@layer base {
+  body {
+    @apply bg-base-200 text-base-content font-sans antialiased;
+  }
+
+  /* Dark theme — remap the console tokens onto the control-room register so every
+     text-ink / bg-console / ring-line utility adapts without per-component work. */
+  [data-theme="dark"] {
+    --color-ink: var(--color-panel-text);
+    --color-ink-muted: var(--color-panel-muted);
+    --color-console: var(--color-panel);
+    --color-sheet: var(--color-panel-2);
+    --color-line: var(--color-panel-line);
+  }
+
+  /* Keep the control-room panel a step darker than the dark canvas */
+  [data-theme="dark"] .panel {
+    --panel: #0b0f16;
+    --panel-2: #121a26;
+    --panel-line: #1e2635;
+    --panel-text: #e8ecf3;
+    --panel-muted: #93a0b3;
+  }
+
+  /* Selection + caret from the palette */
+  ::selection {
+    background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 999px;
+    border: 3px solid var(--color-console);
+  }
+
+  /* Visible, consistent keyboard focus */
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Elevated sheet: cards, tables, modals */
+  .surface {
+    @apply bg-base-100 border border-base-300 rounded-box;
+  }
+
+  /* Calm page-load fade for app screens */
+  .page-enter {
+    animation: page-enter 0.22s ease-out both;
+  }
+
+  /* Mono data layer — model names, temps, ids, dates, numbers */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- Signal lamp system ---------- */
+  .lamp {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .lamp-idle { background: var(--color-lamp-idle); }
+  .lamp-running {
+    background: var(--color-lamp-running);
+    animation: lamp-pulse 1.6s ease-in-out infinite;
+  }
+  .lamp-done { background: var(--color-lamp-done); }
+  .lamp-failed { background: var(--color-lamp-failed); }
+  .lamp-review { background: var(--color-lamp-review); }
+
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
+  }
+  .status-pill-idle { color: var(--color-lamp-idle); background: color-mix(in srgb, var(--color-lamp-idle) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-idle) 22%, transparent); }
+  .status-pill-running { color: var(--color-lamp-running); background: color-mix(in srgb, var(--color-lamp-running) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-running) 22%, transparent); }
+  .status-pill-done { color: var(--color-lamp-done); background: color-mix(in srgb, var(--color-lamp-done) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-done) 22%, transparent); }
+  .status-pill-failed { color: var(--color-lamp-failed); background: color-mix(in srgb, var(--color-lamp-failed) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-failed) 22%, transparent); }
+  .status-pill-review { color: var(--color-lamp-review); background: color-mix(in srgb, var(--color-lamp-review) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-review) 22%, transparent); }
+
+  /* Role identity chips — one hue per role family */
+  .role-chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
+  }
+  .role-researcher { color: var(--color-role-blue); background: color-mix(in srgb, var(--color-role-blue) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-blue) 22%, transparent); }
+  .role-writer { color: var(--color-role-green); background: color-mix(in srgb, var(--color-role-green) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-green) 22%, transparent); }
+  .role-analyst { color: var(--color-role-slate); background: color-mix(in srgb, var(--color-role-slate) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-slate) 22%, transparent); }
+  .role-critic { color: var(--color-role-violet); background: color-mix(in srgb, var(--color-role-violet) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-violet) 22%, transparent); }
+  .role-developer { color: var(--color-role-teal); background: color-mix(in srgb, var(--color-role-teal) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-teal) 22%, transparent); }
+  .role-designer { color: var(--color-role-rose); background: color-mix(in srgb, var(--color-role-rose) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-rose) 22%, transparent); }
+  [data-theme="dark"] .role-researcher { color: var(--color-role-blue-dark); background: color-mix(in srgb, var(--color-role-blue-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-blue-dark) 30%, transparent); }
+  [data-theme="dark"] .role-writer { color: var(--color-role-green-dark); background: color-mix(in srgb, var(--color-role-green-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-green-dark) 30%, transparent); }
+  [data-theme="dark"] .role-analyst { color: var(--color-role-slate-dark); background: color-mix(in srgb, var(--color-role-slate-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-slate-dark) 30%, transparent); }
+  [data-theme="dark"] .role-critic { color: var(--color-role-violet-dark); background: color-mix(in srgb, var(--color-role-violet-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-violet-dark) 30%, transparent); }
+  [data-theme="dark"] .role-developer { color: var(--color-role-teal-dark); background: color-mix(in srgb, var(--color-role-teal-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-teal-dark) 30%, transparent); }
+  [data-theme="dark"] .role-designer { color: var(--color-role-rose-dark); background: color-mix(in srgb, var(--color-role-rose-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-rose-dark) 30%, transparent); }
+
+  /* Tool tags — data in the mono layer */
+  .tool-tag {
+    @apply inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] font-medium;
+    color: var(--color-ink-muted);
+    background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+    box-shadow: inset 0 0 0 1px var(--color-line);
+  }
+
+  /* Spec-sheet table headers */
+  .table :where(th) {
+    @apply text-xs font-semibold text-base-content/55 bg-transparent pb-3 pt-1;
+  }
+  .table :where(td) {
+    @apply py-3.5 text-sm;
+  }
+  .table :where(thead th, thead td) {
+    border-bottom: 1px solid var(--color-line);
+  }
+  .table :where(tbody tr) {
+    border-bottom: 1px solid var(--color-line);
+  }
+  .table :where(tbody tr:last-child) {
+    border-bottom: none;
+  }
+
+  /* Skeleton shimmer */
+  .skeleton-block {
+    @apply rounded-md bg-base-300/70 animate-pulse;
+  }
+}
+
+/* ---------- Control room (dark instrument panel) ---------- */
+.panel {
+  --panel: #10151f;
+  --panel-2: #171e2b;
+  --panel-line: #232c3d;
+  --panel-text: #e8ecf3;
+  --panel-muted: #93a0b3;
+  --lamp-idle: #7fa6e8;
+  --lamp-running: #e0a32e;
+  --lamp-done: #4bbf8a;
+  --lamp-failed: #ff8a80;
+  --lamp-review: #b9a3f2;
+  background: var(--panel);
+  color: var(--panel-text);
+}
+
+/* ---------- Route schematic (signature) ---------- */
+.schematic-node {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.schematic-active {
+  animation: node-breathe 2.2s ease-in-out infinite;
+}
+.schematic-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: node-halo 1.8s ease-out infinite;
+}
+.schematic-track-flow {
+  stroke-dasharray: 4 8;
+  animation: track-flow 2s linear infinite;
+}
+
+/* ---------- Motion ---------- */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes lamp-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes node-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+@keyframes node-halo {
+  0% { opacity: 0.5; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}
+@keyframes track-flow {
+  to { stroke-dashoffset: -24; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .lamp-running {
+    animation: none;
+    opacity: 1;
+  }
 }

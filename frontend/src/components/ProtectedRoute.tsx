@@ -17,8 +17,12 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!checked || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-base-100">
-        <div className="loading loading-spinner loading-lg text-primary"></div>
+      <div className="min-h-dvh bg-base-200 grid place-items-center px-4" aria-label="Loading">
+        <div className="surface p-6 w-full max-w-sm">
+          <div className="skeleton-block h-6 w-32 mb-4" />
+          <div className="skeleton-block h-4 w-full mb-2" />
+          <div className="skeleton-block h-4 w-3/4" />
+        </div>
       </div>
     )
   }

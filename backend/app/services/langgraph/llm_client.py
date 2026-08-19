@@ -1,6 +1,5 @@
 from functools import lru_cache
 import logging
-import random
 import re
 import time
 
@@ -47,6 +46,35 @@ PACING_SECONDS = 7.0
 # Fixed wait for a tokens-per-minute reset (the window is 60s rolling).
 TPM_RESET_SECONDS = 65.0
 
+# Markers for the "model called a tool it doesn't have" rejection. gpt-oss
+# models natively reach for `browser.search`; when the request binds no tools
+# (or tool_choice="none") the API hard-rejects the CALL with a 400 — the model
+# message never comes back, so this must be intercepted at the call site.
+TOOL_USE_FAILED_MARKERS = ("tool_use_failed", "Tool choice is none", "model called a tool")
+
+
+def _tool_name_from_error(msg: str) -> str | None:
+    """Pull the tool name out of `failed_generation: '{"name": "..."}'`."""
+    m = re.search(r"failed_generation[^}]*?\"name\":\s*\"([^\"]+)\"", msg, re.DOTALL)
+    if m:
+        return m.group(1)
+    m = re.search(r"\"name\":\s*\"([^\"]+)\"", msg)
+    return m.group(1) if m else None
+
+
+def tool_unavailable_prompt(tool_name: str | None) -> str:
+    """Instruction used after a model tries a tool it does not have."""
+    if tool_name:
+        return (
+            f"You attempted to call the tool '{tool_name}', but it is NOT available "
+            "to you in this environment. Answer the request directly using your own "
+            "knowledge. Do NOT attempt to call any tools."
+        )
+    return (
+        "You attempted to call a tool, but tools are NOT available to you in this "
+        "environment. Answer the request directly using your own knowledge."
+    )
+
 
 def _classify_error(exc: Exception) -> str:
     """Classify an exception as 'quota_exhausted', 'tpm_limit', 'transient', or 'other'.
@@ -82,51 +110,36 @@ def _classify_error(exc: Exception) -> str:
 def invoke_with_retry(
     chain,
     input,
-    max_attempts: int = 3,
+    max_attempts: int = 1,
     base_delay: float = 10.0,
     max_delay: float = 60.0,
 ):
-    """Call chain.invoke(input), retrying with backoff on transient errors only.
+    """Invoke the model once — no blind retry loop (retries re-send requests,
+    burn quota, and hammer the API when the quota is already exhausted).
 
-    - 'transient' (short 429 burst, 503): retried with exponential backoff + jitter.
-    - 'quota_exhausted' (limit: 0, or hours-long retry hint): fails immediately —
-      retrying can't fix a daily wall.
-    - anything else: raised immediately.
+    The ONLY re-call is a one-shot corrective pass when the model tries to
+    call a tool it does not have (gpt-oss natively reaches for
+    `browser.search`): the API rejects the CALL with a 400, so we tell the
+    model the tool is unavailable and let it answer from knowledge.
     """
-    last_exc: Exception | None = None
+    try:
+        result = chain.invoke(input)
+        time.sleep(PACING_SECONDS)
+        return result
+    except Exception as exc:
+        msg = str(exc)
+        if any(marker in msg for marker in TOOL_USE_FAILED_MARKERS):
+            logger.warning("Model tried an unavailable tool, one corrective re-call: %s", msg[:200])
+            try:
+                if isinstance(input, list):
+                    from langchain_core.messages import HumanMessage
 
-    for attempt in range(max_attempts):
-        try:
-            result = chain.invoke(input)
-            time.sleep(PACING_SECONDS)
-            return result
-        except Exception as exc:
-            last_exc = exc
-            kind = _classify_error(exc)
-
-            if kind == "quota_exhausted":
-                logger.error("LLM quota exhausted, not retrying: %s", exc)
-                raise
-
-            if kind == "tpm_limit" and attempt < max_attempts - 1:
-                logger.warning(
-                    "TPM cap hit on attempt %d/%d, waiting %.0fs for window reset: %s",
-                    attempt + 1, max_attempts, TPM_RESET_SECONDS, exc,
-                )
-                time.sleep(TPM_RESET_SECONDS)
-                continue
-
-            if kind == "transient" and attempt < max_attempts - 1:
-                delay = min(base_delay * (2 ** attempt), max_delay)
-                delay += random.uniform(0, delay * 0.1)  # jitter
-                logger.warning(
-                    "Transient error on attempt %d/%d, retrying in %.1fs: %s",
-                    attempt + 1, max_attempts, delay, exc,
-                )
-                time.sleep(delay)
-                continue
-
-            raise
-
-    if last_exc:
-        raise last_exc
+                    corrective = input + [HumanMessage(tool_unavailable_prompt(_tool_name_from_error(msg)))]
+                    result = chain.invoke(corrective)
+                else:
+                    result = chain.invoke(input)
+                time.sleep(PACING_SECONDS)
+                return result
+            except Exception as exc2:
+                raise exc2
+        raise exc

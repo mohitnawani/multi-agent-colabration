@@ -21,7 +21,12 @@ from langchain_core.messages import HumanMessage, ToolMessage
 from langgraph.prebuilt import ToolNode
 
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, invoke_with_retry
+from app.services.langgraph.llm_client import (
+    DEFAULT_MODEL,
+    get_chat_model,
+    invoke_with_retry,
+    tool_unavailable_prompt,
+)
 from app.services.langgraph.state import CHAT_RESET, CollaborationState, log_change
 from app.services.tools.research_tools import get_tools
 
@@ -78,6 +83,11 @@ def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "rev
             subtask = _subtask_for(state, agent.name)
             assignment = subtask["description"] if subtask else state["task_description"]
             prompt = f"{agent.system_prompt}\n\nAssignment: {assignment}"
+            if not tools:
+                prompt += (
+                    "\n\nNOTE: You have NO tools available (no web search, no browser). "
+                    "Do not attempt to call any tool — answer directly from your own knowledge."
+                )
             entry = state["agent_outputs"].get(agent.name, {})
             if entry.get("revision_round", 0) > 0 and state.get("feedback"):
                 prompt += f"\n\nREVIEWER FEEDBACK — revise your answer accordingly:\n{state['feedback']}"
@@ -107,12 +117,10 @@ def build_worker_node(agent: Agent, tools_node_name: str, final_next: str = "rev
         # model-native tool like browser.search) — ask it once to answer
         # directly instead of crashing the run.
         if ai_msg.tool_calls:
+            attempted = ai_msg.tool_calls[0].get("name")
             ai_msg = invoke_with_retry(
                 bound_model,
-                chat + [ai_msg] + [HumanMessage(
-                    "You tried to use a tool that is not available to you. "
-                    "Answer the assignment directly using your own knowledge — do not call any tools."
-                )],
+                chat + [ai_msg] + [HumanMessage(tool_unavailable_prompt(attempted))],
             )
             if ai_msg.tool_calls:
                 # still insisting — drop the tool calls and keep whatever text it gave

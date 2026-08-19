@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from app.models.orm_models import Agent
-from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model
+from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, tool_unavailable_prompt
 from app.services.langgraph.state import CollaborationState, log_change
 from app.services.langgraph.synthesis import build_synthesis_node
 from app.services.langgraph.worker_agents import _flatten_content, build_worker_node, build_worker_tool_node
@@ -87,7 +87,13 @@ def build_parallel_worker_node(agents: list[Agent]):
         history = []
 
         for agent, tools_by_name, bound_model in workers:
-            chat = [HumanMessage(f"{agent.system_prompt}\n\nAssignment: {state['task_description']}")]
+            assignment = f"{agent.system_prompt}\n\nAssignment: {state['task_description']}"
+            if not tools_by_name:
+                assignment += (
+                    "\n\nNOTE: You have NO tools available (no web search, no browser). "
+                    "Do not attempt to call any tool — answer directly from your own knowledge."
+                )
+            chat = [HumanMessage(assignment)]
             final = None
             for _ in range(MAX_TOOL_ROUNDS):
                 ai_msg = bound_model.invoke(chat)
@@ -98,6 +104,7 @@ def build_parallel_worker_node(agents: list[Agent]):
                 for tc in ai_msg.tool_calls:
                     tool = tools_by_name.get(tc["name"])
                     if tool is None:
+                        chat = chat + [HumanMessage(tool_unavailable_prompt(tc["name"]))]
                         continue
                     result = tool.invoke(tc["args"])
                     chat = chat + [ToolMessage(content=str(result), tool_call_id=tc["id"])]

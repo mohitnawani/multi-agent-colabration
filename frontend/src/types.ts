@@ -75,6 +75,15 @@ export interface ResumeTaskPayload {
   feedback?: string;
 }
 
+export interface AgentOutput {
+  id: string;
+  agent_name: string;
+  content: string | null;
+  quality_score: number | null;
+  revision_round: number;
+  created_at: string;
+}
+
 export type ProgressEventType = 'progress' | 'interrupt' | 'paused' | 'done' | 'error' | 'idle';
 
 export interface ProgressEvent {

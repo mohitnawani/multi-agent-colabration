@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from app.models.orm_models import Agent
 from app.services.langgraph.llm_client import DEFAULT_MODEL, get_chat_model, invoke_with_retry
 from app.services.langgraph.state import CollaborationState, log_change
+from app.services.langgraph.worker_agents import _flatten_content
 
 DEBATE_ROUNDS = 2
 
@@ -82,7 +83,7 @@ def build_debate_node(agents: list[Agent], rounds: int = DEBATE_ROUNDS):
                     ("human", turn_prompt),
                 ]
                 reply = invoke_with_retry(model, chat)
-                content = "".join(p.get("text", "") for p in reply.content if p.get("type") == "text") or str(reply.content)
+                content = _flatten_content(reply.content)
 
                 arguments.append(
                     {

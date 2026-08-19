@@ -145,3 +145,15 @@ class TaskOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class AgentOutputOut(BaseModel):
+    id: str
+    agent_name: str
+    content: Optional[str] = None
+    quality_score: Optional[float] = None
+    revision_round: int = 0
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

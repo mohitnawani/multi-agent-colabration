@@ -1,28 +1,48 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link } from 'react-router'
 import { listAgents, createAgentFromTemplate, deleteAgent } from '../features/agents/agentsSlice'
 import type { RootState, AppDispatch } from '../store'
 import type { Template } from '../types'
+import { AppNavbar } from '../components/AppNavbar'
+import { PageHeader } from '../components/PageHeader'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { AgentAvatar } from '../components/AgentAvatar'
+import { RoleBadge } from '../components/RoleBadge'
+import { Skeleton } from '../components/Skeleton'
+import { Modal } from '../components/ui/modal'
+import { Button } from '../components/ui/button'
+import { ToolTag } from '../components/ui/tool-tag'
+import { EmptyState } from '../components/ui/empty-state'
+import { useNotify } from '../components/ui/use-notify'
+import { cn } from '../lib/cn'
 
 const createAgentSchema = z.object({
   template_key: z.string().min(1, 'Select a template'),
-  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
-  system_prompt: z.string().optional(),
+  name: z
+    .string()
+    .trim()
+    .min(2, 'Name must be at least 2 characters')
+    .max(50, 'Name must be at most 50 characters'),
+  system_prompt: z
+    .string()
+    .trim()
+    .max(4000, 'Custom prompt must be at most 4000 characters')
+    .optional()
+    .or(z.literal('')),
 })
 
 type CreateAgentFormData = z.infer<typeof createAgentSchema>
 
 const TEMPLATE_LABELS: Record<string, string> = {
-  researcher: 'Researcher — web search, note taking',
-  writer: 'Writer — clear, structured content',
-  analyst: 'Analyst — data analysis, patterns, risks',
-  critic: 'Critic — find weaknesses, fact-check',
-  developer: 'Developer — clean, idiomatic code',
-  designer: 'Designer — creative, visual ideas',
+  researcher: 'Researcher â€” web search, note taking',
+  writer: 'Writer â€” clear, structured content',
+  analyst: 'Analyst â€” data analysis, patterns, risks',
+  critic: 'Critic â€” find weaknesses, fact-check',
+  developer: 'Developer â€” clean, idiomatic code',
+  designer: 'Designer â€” creative, visual ideas',
 }
 
 export default function AgentsPage() {
@@ -31,6 +51,10 @@ export default function AgentsPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [templates, setTemplates] = useState<Template[]>([])
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletingName, setDeletingName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const notify = useNotify()
 
   const {
     register,
@@ -56,198 +80,227 @@ export default function AgentsPage() {
     }
   }
 
-  const onSubmit = (data: CreateAgentFormData) => {
-    dispatch(createAgentFromTemplate(data)).then(() => {
-      reset()
+  const openCreate = () => {
+    reset({ template_key: 'researcher', name: '', system_prompt: '' })
+    setShowCreateModal(true)
+  }
+
+  const onSubmit = async (data: CreateAgentFormData) => {
+    setSubmitting(true)
+    try {
+      await dispatch(createAgentFromTemplate(data)).unwrap()
+      reset({ template_key: 'researcher', name: '', system_prompt: '' })
       setShowCreateModal(false)
-    })
+      notify.success('Agent created')
+    } catch (err) {
+      notify.error(typeof err === 'string' ? `Couldn't create the agent â€” ${err}` : "Couldn't create the agent")
+    } finally {
+      setSubmitting(false)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setDeletingId(id)
+  const handleDelete = (agent: { id: string; name: string }) => {
+    setDeletingId(agent.id)
+    setDeletingName(agent.name)
   }
 
-  const confirmDelete = (id: string) => {
-    dispatch(deleteAgent(id))
-    setDeletingId(null)
-  }
-
-  if (loading && agents.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-base-100">
-        <div className="loading loading-spinner loading-lg text-primary"></div>
-      </div>
-    )
+  const confirmDelete = async (id: string) => {
+    setDeleting(true)
+    try {
+      await dispatch(deleteAgent(id)).unwrap()
+      notify.success('Agent deleted')
+    } catch (err) {
+      notify.error(typeof err === 'string' ? `Couldn't delete the agent â€” ${err}` : "Couldn't delete the agent")
+    } finally {
+      setDeleting(false)
+      setDeletingId(null)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-base-100">
-      <nav className="navbar bg-base-100 border-b border-base-300">
-        <div className="navbar-start">
-          <Link to="/dashboard" className="btn btn-ghost text-xl font-bold">Multi-Agent Collaboration</Link>
-        </div>
-        <div className="navbar-center hidden lg:flex">
-          <ul className="menu menu-horizontal px-1">
-            <li><Link to="/dashboard" className="btn btn-ghost">Dashboard</Link></li>
-            <li><Link to="/teams" className="btn btn-ghost">Teams</Link></li>
-            <li><Link to="/agents" className="btn btn-ghost active">Agents</Link></li>
-            <li><Link to="/tasks" className="btn btn-ghost">Tasks</Link></li>
-          </ul>
-        </div>
-      </nav>
+    <div className="min-h-dvh bg-base-200">
+      <AppNavbar active="agents" />
 
-      <main className="p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-base-content">Agents</h1>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="btn btn-primary gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Create Agent
-            </button>
-          </div>
+      <main className="px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-6xl page-enter">
+          <PageHeader
+            title="Agents"
+            subtitle="Specialized AI workers created from templates."
+            actions={
+              <Button onClick={openCreate}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                Create Agent
+              </Button>
+            }
+          />
 
           {error && (
-            <div className="alert alert-error mb-6" role="alert">
-              <span>{error}</span>
+            <div className="mb-6 flex items-start gap-2.5 rounded-field bg-lamp-failed/10 px-4 py-3 text-sm text-lamp-failed ring-1 ring-inset ring-lamp-failed/25" role="alert">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+              {error}
             </div>
           )}
 
-          {agents.length === 0 && !loading && (
-            <div className="card bg-base-100 border border-base-300 text-center py-12">
-              <p className="text-base-content/60 mb-4">No agents yet. Create your first agent from a template.</p>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="btn btn-primary"
+          {loading && agents.length === 0 ? (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading agents">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="surface p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <Skeleton className="h-8 w-32" />
+                    <Skeleton className="size-8 rounded-lg" />
+                  </div>
+                  <Skeleton className="mb-3 h-5 w-20" />
+                  <Skeleton className="mb-2 h-4 w-full" />
+                  <Skeleton className="mb-5 h-4 w-3/4" />
+                  <Skeleton className="h-5 w-28" />
+                </div>
+              ))}
+            </div>
+          ) : agents.length === 0 ? (
+            <div className="surface">
+              <EmptyState
+                title="No agents yet"
+                description="Start from a template. Each template sets a role, tools, and a base prompt â€” you can override the prompt after."
               >
-                Create Agent
-              </button>
+                <Button onClick={openCreate}>Create Agent</Button>
+              </EmptyState>
             </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {agents.map((agent) => (
-              <article key={agent.id} className="card bg-base-100 border border-base-300 hover:shadow-lg transition-shadow">
-                <div className="card-body">
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="text-lg font-semibold text-base-content">{agent.name}</h3>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {agents.map((agent) => (
+                <article key={agent.id} className="surface flex flex-col p-5 transition-shadow hover:shadow-md">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <AgentAvatar name={agent.name} />
+                      <h3 className="truncate text-base font-semibold tracking-tight text-ink">
+                        {agent.name}
+                      </h3>
+                    </div>
                     <button
-                      onClick={() => handleDelete(agent.id)}
-                      className="btn btn-ghost btn-sm btn-circle text-error hover:bg-error/10"
-                      aria-label="Delete agent"
+                      onClick={() => handleDelete(agent)}
+                      className="grid size-8 shrink-0 place-items-center rounded-field text-ink-muted transition-colors hover:bg-lamp-failed/10 hover:text-lamp-failed"
+                      aria-label={`Delete agent ${agent.name}`}
+                      title="Delete agent"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                     </button>
                   </div>
-                  {agent.role && (
-                    <span className="badge badge-secondary mb-2">{agent.role}</span>
-                  )}
-                  <p className="text-sm text-base-content/70 mb-3 line-clamp-2">{agent.system_prompt || 'No custom prompt'}</p>
-                  <div className="flex flex-wrap gap-1.5 mb-3">
+
+                  <div className="mb-2.5">{agent.role && <RoleBadge role={agent.role} />}</div>
+
+                  <p className="mb-4 line-clamp-2 text-sm text-ink-muted text-pretty">
+                    {agent.system_prompt || 'No custom prompt'}
+                  </p>
+
+                  <div className="mb-4 flex flex-wrap gap-1.5">
                     {agent.tools.map((tool) => (
-                      <span key={tool} className="badge badge-outline badge-sm">{tool}</span>
+                      <ToolTag key={tool} tool={tool} />
                     ))}
                     {agent.tools.length === 0 && (
-                      <span className="badge badge-outline badge-sm badge-neutral">No tools</span>
+                      <span className="text-xs text-ink-muted/70">No tools</span>
                     )}
                   </div>
-                  <div className="text-xs text-base-content/50 flex items-center gap-4">
-                    <span>Model: <code>{agent.llm_model}</code></span>
-                    <span>Temp: {agent.temperature}</span>
+
+                  <div className="mt-auto flex items-center gap-4 border-t border-base-300 pt-3 font-mono text-xs text-ink-muted">
+                    <span className="truncate">
+                      <span className="text-ink-muted/70">Model </span>
+                      <span className="text-ink">{agent.llm_model}</span>
+                    </span>
+                    <span>
+                      <span className="text-ink-muted/70">Temp </span>
+                      <span className="text-ink tabular">{agent.temperature}</span>
+                    </span>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 
-      {/* Modals */}
-      <>
-        {/* Create Agent Modal */}
-        <input type="checkbox" id="create-agent-modal" className="modal-toggle" checked={showCreateModal} onChange={() => setShowCreateModal(false)} />
-        <div className="modal">
-          <div className="modal-box max-w-md">
-            <h3 className="font-bold text-xl mb-4">Create Agent from Template</h3>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text text-base-content">Template</span>
-                </label>
-                <select
-                  {...register('template_key')}
-                  className="select select-bordered w-full max-w-xs"
-                >
-                  {templates.map((t) => (
-                    <option key={t.key} value={t.key}>
-                      {TEMPLATE_LABELS[t.key] || t.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.template_key && (
-                  <label className="label text-error">
-                    <span className="label-text-alt">{errors.template_key.message}</span>
-                  </label>
-                )}
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text text-base-content">Agent Name</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="My Researcher"
-                  className="input input-bordered w-full"
-                  {...register('name')}
-                />
-                {errors.name && (
-                  <label className="label text-error">
-                    <span className="label-text-alt">{errors.name.message}</span>
-                  </label>
-                )}
-              </div>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text text-base-content">Custom System Prompt (optional)</span>
-                </label>
-                <textarea
-                  className="textarea textarea-bordered w-full min-h-[80px]"
-                  placeholder="Override the template's default prompt..."
-                  {...register('system_prompt')}
-                />
-              </div>
-
-              <div className="modal-action">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="submit" disabled={loading} className="btn btn-primary">
-                  {loading ? 'Creating…' : 'Create Agent'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        {/* Delete Confirm Modal */}
-        {deletingId && (
+      {/* Create agent */}
+      <Modal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Create agent"
+        description="Start from a built-in template and customize the prompt."
+        footer={
           <>
-            <input type="checkbox" id="delete-agent-modal" className="modal-toggle" checked={true} />
-            <div className="modal">
-              <div className="modal-box max-w-sm">
-                <h3 className="font-bold text-lg mb-3">Delete Agent?</h3>
-                <p className="text-base-content/70 mb-4">This action cannot be undone.</p>
-                <div className="modal-action">
-                  <button type="button" className="btn btn-ghost" onClick={() => setDeletingId(null)}>Cancel</button>
-                  <button type="button" className="btn btn-error" onClick={() => confirmDelete(deletingId)}>Delete</button>
-                </div>
-              </div>
-            </div>
+            <Button variant="ghost" onClick={() => setShowCreateModal(false)}>Cancel</Button>
+            <Button type="submit" form="create-agent-form" disabled={submitting}>
+              {submitting ? 'Creatingâ€¦' : 'Create agent'}
+            </Button>
           </>
-        )}
-      </>
+        }
+      >
+        <form id="create-agent-form" onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="agent-template">
+              Template
+            </label>
+            <select
+              id="agent-template"
+              className="h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15"
+              {...register('template_key')}
+            >
+              {templates.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {TEMPLATE_LABELS[t.key] || t.name}
+                </option>
+              ))}
+            </select>
+            {errors.template_key && <p className="mt-1.5 text-xs text-lamp-failed" role="alert">{errors.template_key.message}</p>}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="agent-name">
+              Agent name
+            </label>
+            <input
+              id="agent-name"
+              type="text"
+              placeholder="My Researcher"
+              className={cn(
+                'h-10 w-full rounded-field border bg-base-100 px-3.5 text-sm text-ink placeholder:text-ink-muted/60',
+                'focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                errors.name ? 'border-lamp-failed' : 'border-line',
+              )}
+              {...register('name')}
+            />
+            {errors.name && <p className="mt-1.5 text-xs text-lamp-failed" role="alert">{errors.name.message}</p>}
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-ink" htmlFor="agent-prompt">
+              Custom system prompt (optional)
+            </label>
+            <textarea
+              id="agent-prompt"
+              className={cn(
+                'min-h-[90px] w-full rounded-field border bg-base-100 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted/60',
+                'focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                'border-line',
+              )}
+              placeholder="Override the template's default prompt..."
+              {...register('system_prompt')}
+            />
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deletingId}
+        title="Delete agent?"
+        description={
+          <>
+            <strong>{deletingName}</strong> will be removed from all teams. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete agent"
+        busy={deleting}
+        onConfirm={() => deletingId && confirmDelete(deletingId)}
+        onClose={() => !deleting && setDeletingId(null)}
+      />
     </div>
   )
 }
