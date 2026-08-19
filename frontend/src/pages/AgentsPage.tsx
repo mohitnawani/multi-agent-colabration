@@ -251,7 +251,7 @@ export default function AgentsPage() {
                 </option>
               ))}
             </select>
-            {errors.template_key && <p className="mt-1.5 text-xs text-lamp-failed" role="alert">{errors.template_key.message}</p>}
+            {errors.template_key?.message && <p className="mt-1.5 text-xs text-lamp-failed" role="alert">{errors.template_key.message}</p>}
           </div>
 
           <div>
