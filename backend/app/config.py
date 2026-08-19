@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 1440
     redis_url: str = "redis://localhost:6379/0"
-    cookie_secure: bool = False  # set True in production (HTTPS)
+    cookie_secure: bool = True  # set False in development (HTTP)
 
     class Config:
         env_file = ".env"
