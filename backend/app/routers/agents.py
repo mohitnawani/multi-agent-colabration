@@ -41,7 +41,10 @@ def _is_agent_in_use(agent_id: str, db: Session) -> bool:
 
 
 @router.get("/templates")
-def list_templates():
+def list_templates(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     return AGENT_TEMPLATES
 
 
