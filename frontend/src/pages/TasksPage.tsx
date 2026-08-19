@@ -1,14 +1,14 @@
-﻿import { useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from 'react-router'
-import { listTasks, createTask, runTask, deleteTask, resumeTask, fetchTaskOutputs } from '../features/tasks/tasksSlice'
+import { listTasks, createTask, runTask, deleteTask, resumeTask, stopTask, fetchTaskOutputs } from '../features/tasks/tasksSlice'
 import { listTeams } from '../features/teams/teamsSlice'
 import { listAgents } from '../features/agents/agentsSlice'
 import type { RootState, AppDispatch } from '../store'
-import type { AgentOutput, Team, Task } from '../types'
+import type { Team, Task } from '../types'
 import { AppNavbar } from '../components/AppNavbar'
 import { PageHeader } from '../components/PageHeader'
 import { StatusBadge } from '../components/StatusBadge'
@@ -17,8 +17,12 @@ import { Modal } from '../components/ui/modal'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { useNotify } from '../components/ui/use-notify'
-import { TranscriptView } from '../components/ui/transcript-view'
 import { cn } from '../lib/cn'
+
+// Transcript (incl. react-markdown) loads only when a transcript is opened
+const TranscriptView = lazy(() =>
+  import('../components/ui/transcript-view').then((m) => ({ default: m.TranscriptView })),
+)
 
 const createTaskSchema = z.object({
   team_id: z.string().min(1, 'Select a team'),
@@ -87,7 +91,7 @@ export default function TasksPage() {
       setShowCreateModal(false)
       notify.success('Task created')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't create the task â€” ${err}` : "Couldn't create the task")
+      notify.error(typeof err === 'string' ? `Couldn't create the task — ${err}` : "Couldn't create the task")
     } finally {
       setSubmitting(false)
     }
@@ -99,18 +103,33 @@ export default function TasksPage() {
   }
 
   const handleRun = async (taskId: string) => {
+    // Open the transcript right away so the live hand-offs stream in as the
+    // team works; the run itself resolves when it finishes (or stops).
     setRunningTaskId(taskId)
+    openTranscript(taskId)
     try {
       await dispatch(runTask({ taskId })).unwrap()
-      openTranscript(taskId)
     } catch (err) {
       const message = typeof err === 'string' ? err : 'The run failed before the team finished.'
       notify.error(`${message} Open the transcript to see what happened.`)
-      openTranscript(taskId)
     } finally {
       setRunningTaskId(null)
     }
   }
+
+  const handleStop = async (taskId: string) => {
+    try {
+      await dispatch(stopTask(taskId)).unwrap()
+    } catch (err) {
+      notify.error(typeof err === 'string' ? `Couldn't stop the run — ${err}` : "Couldn't stop the run")
+    }
+  }
+
+  const handleStreamDone = useCallback(() => {
+    // The run reached a terminal event (done / stopped / failed): refresh the
+    // task list; the outputs effect below picks up 'done' automatically.
+    dispatch(listTasks())
+  }, [dispatch])
 
   const handleApprove = async (taskId: string) => {
     setRunningTaskId(taskId)
@@ -118,7 +137,7 @@ export default function TasksPage() {
       await dispatch(resumeTask({ taskId, payload: { approval: true } })).unwrap()
       openTranscript(taskId)
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't approve the plan â€” ${err}` : "Couldn't approve the plan")
+      notify.error(typeof err === 'string' ? `Couldn't approve the plan — ${err}` : "Couldn't approve the plan")
     } finally {
       setRunningTaskId(null)
     }
@@ -137,7 +156,7 @@ export default function TasksPage() {
       setShowRejectModal(false)
       openTranscript(taskId)
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't reject the plan â€” ${err}` : "Couldn't reject the plan")
+      notify.error(typeof err === 'string' ? `Couldn't reject the plan — ${err}` : "Couldn't reject the plan")
     } finally {
       setRunningTaskId(null)
     }
@@ -151,7 +170,7 @@ export default function TasksPage() {
       await dispatch(deleteTask(id)).unwrap()
       notify.success('Task deleted')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't delete the task â€” ${err}` : "Couldn't delete the task")
+      notify.error(typeof err === 'string' ? `Couldn't delete the task — ${err}` : "Couldn't delete the task")
     } finally {
       setDeleting(false)
       setDeletingId(null)
@@ -215,10 +234,12 @@ export default function TasksPage() {
               {teams.length === 0 ? (
                 <EmptyState
                   title="Tasks run against a team"
+                  tint="bg-mod-tasks/10 text-mod-tasks ring-mod-tasks/25"
+                  flow="tasks"
                   description={
                     <>
                       A task is a prompt executed end-to-end by a team of agents. Build a team
-                      first â€” <Link to="/teams" className="font-semibold text-ink underline underline-offset-4">group some agents under a pattern</Link> â€” then create tasks here.
+                      first — <Link to="/teams" className="font-semibold text-ink underline underline-offset-4">group some agents under a pattern</Link> — then create tasks here.
                     </>
                   }
                 >
@@ -229,7 +250,9 @@ export default function TasksPage() {
               ) : (
                 <EmptyState
                   title="No tasks yet"
-                  description="Create a task and the team executes it end-to-end â€” you can watch the hand-offs live in the transcript."
+                  tint="bg-mod-tasks/10 text-mod-tasks ring-mod-tasks/25"
+                  flow="tasks"
+                  description="Create a task and the team executes it end-to-end — you can watch the hand-offs live in the transcript."
                 >
                   <Button onClick={() => setShowCreateModal(true)}>Create Task</Button>
                 </EmptyState>
@@ -243,8 +266,8 @@ export default function TasksPage() {
                     <th>Description</th>
                     <th>Team</th>
                     <th>Status</th>
-                    <th>Created</th>
-                    <th className="text-right">Actions</th>
+                    <th className="text-right">Created</th>
+                    <th className="w-64 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -264,7 +287,7 @@ export default function TasksPage() {
                         <td>
                           <StatusBadge status={task.status || 'pending'} spinner={isRunningThis} />
                         </td>
-                        <td className="font-mono text-xs text-ink-muted/80 tabular">
+                        <td className="font-mono text-xs text-ink-muted/80 tabular text-right">
                           {new Date(task.created_at).toLocaleDateString()}
                         </td>
                         <td className="text-right">
@@ -278,8 +301,8 @@ export default function TasksPage() {
                                     ? 'text-lamp-failed hover:bg-lamp-failed/10'
                                     : 'text-ink-muted hover:bg-console hover:text-ink',
                                 )}
-                                aria-label={failed ? 'View transcript â€” see what failed' : 'View transcript'}
-                                title={failed ? 'View transcript â€” see what failed' : 'View transcript'}
+                                aria-label={failed ? 'View transcript — see what failed' : 'View transcript'}
+                                title={failed ? 'View transcript — see what failed' : 'View transcript'}
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>
                               </button>
@@ -357,7 +380,7 @@ export default function TasksPage() {
           <>
             <Button variant="ghost" onClick={() => setShowCreateModal(false)}>Cancel</Button>
             <Button type="submit" form="create-task-form" disabled={submitting}>
-              {submitting ? 'Creatingâ€¦' : 'Create task'}
+              {submitting ? 'Creating…' : 'Create task'}
             </Button>
           </>
         }
@@ -369,7 +392,7 @@ export default function TasksPage() {
             </label>
             <select
               id="task-team"
-              className="h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15"
+              className="h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               {...register('team_id')}
             >
               <option value="">Select a team</option>
@@ -388,10 +411,10 @@ export default function TasksPage() {
             </label>
             <textarea
               id="task-description"
-              placeholder="Describe the task for the team to executeâ€¦"
+              placeholder="Describe the task for the team to execute…"
               className={cn(
                 'min-h-[110px] w-full rounded-field border bg-base-100 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted/60',
-                'focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20',
                 errors.description ? 'border-lamp-failed' : 'border-line',
               )}
               {...register('description')}
@@ -403,7 +426,7 @@ export default function TasksPage() {
             <span className="relative inline-flex">
               <input
                 type="checkbox"
-                className="peer size-4 appearance-none rounded-[4px] border border-line bg-base-100 transition-colors checked:border-ink checked:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                className="peer size-4 appearance-none rounded-[4px] border border-line bg-base-100 transition-colors checked:border-ink checked:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                 {...register('require_approval')}
               />
               <svg
@@ -443,7 +466,7 @@ export default function TasksPage() {
               onClick={() => rejectingTaskId && handleReject(rejectingTaskId)}
               disabled={runningTaskId === rejectingTaskId}
             >
-              {runningTaskId === rejectingTaskId ? 'Revisingâ€¦' : 'Reject plan'}
+              {runningTaskId === rejectingTaskId ? 'Revising…' : 'Reject plan'}
             </Button>
           </>
         }
@@ -457,7 +480,7 @@ export default function TasksPage() {
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             placeholder="What should the plan do differently?"
-            className="min-h-[110px] w-full rounded-field border border-line bg-base-100 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted/60 focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15"
+            className="min-h-[110px] w-full rounded-field border border-line bg-base-100 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted/60 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
           />
         </div>
       </Modal>
@@ -478,7 +501,7 @@ export default function TasksPage() {
           <>
             <Button variant="ghost" onClick={() => setDeletingId(null)}>Cancel</Button>
             <Button variant="danger" onClick={() => deletingId && confirmDelete(deletingId)} disabled={deleting}>
-              {deleting ? 'Deletingâ€¦' : 'Delete task'}
+              {deleting ? 'Deleting…' : 'Delete task'}
             </Button>
           </>
         }
@@ -501,19 +524,31 @@ export default function TasksPage() {
         }
       >
         {selectedTask ? (
-          <TranscriptView
-            task={selectedTask}
-            teamName={getTeamName(selectedTask.team_id)}
-            teamPattern={getTeamPattern(selectedTask.team_id)}
-            agentNames={getAgentNames(selectedTask.team_id)}
-            outputs={outputs as AgentOutput[]}
-            outputsLoading={outputsLoading}
-            outputsError={outputsError}
-            runningTaskId={runningTaskId}
-            onReRun={handleRun}
-            onApprove={handleApprove}
-            onReject={openReject}
-          />
+          <Suspense
+            fallback={
+              <div className="flex items-center gap-2.5 text-sm text-ink-muted">
+                <span className="size-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" aria-hidden="true" />
+                Loading transcript…
+              </div>
+            }
+          >
+            <TranscriptView
+              task={selectedTask}
+              teamName={getTeamName(selectedTask.team_id)}
+              teamPattern={getTeamPattern(selectedTask.team_id)}
+              agentNames={getAgentNames(selectedTask.team_id)}
+              outputs={outputs ?? []}
+              outputsLoading={outputsLoading}
+              outputsError={outputsError}
+              runningTaskId={runningTaskId}
+              streaming={runningTaskId === selectedTask.id || selectedTask.status === 'running'}
+              onStop={() => handleStop(selectedTask.id)}
+              onStreamDone={handleStreamDone}
+              onReRun={handleRun}
+              onApprove={handleApprove}
+              onReject={openReject}
+            />
+          </Suspense>
         ) : (
           <p className="text-sm text-ink-muted">This task's transcript is no longer available.</p>
         )}

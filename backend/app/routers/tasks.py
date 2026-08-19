@@ -29,6 +29,15 @@ INTERRUPT_KEY = "__interrupt__"
 STALE_RUN_MINUTES = 5
 
 
+class RunStopped(Exception):
+    """Raised inside the run loop when the user requested the task stop.
+
+    The loop checks the hub's stop flag at each node boundary and aborts
+    cleanly — partial outputs/messages are persisted so the transcript keeps
+    whatever the team produced before the stop.
+    """
+
+
 def _get_owned_task(task_id: str, user_id: str, db: Session) -> Task:
     task = db.get(Task, task_id)
     if task is None or task.user_id != user_id:
@@ -165,6 +174,8 @@ def _stream_and_finish(graph, input, config, task: Task, db: Session, paused_det
 
     try:
         for chunk in graph.stream(input, config, stream_mode="updates"):
+            if hub.stop_requested(task.id):
+                raise RunStopped()
             if INTERRUPT_KEY in chunk:
                 hub.emit(task.id, {"type": "interrupt", "detail": paused_detail, "timestamp": _ts()})
                 task.status = "awaiting_review"
@@ -178,12 +189,32 @@ def _stream_and_finish(graph, input, config, task: Task, db: Session, paused_det
                 }
             for node, update in chunk.items():
                 hub.emit(task.id, make_event(node, update))
+    except RunStopped:
+        logger.info("task %s stopped by user", task.id)
+        values = graph.get_state(config).values
+        task.status = "failed"
+        task.final_output = "Run stopped by the user."
+        _persist_result(db, task, values)
+        db.commit()
+        hub.emit(task.id, {"type": "stopped", "timestamp": _ts()})
+        return {
+            "task_id": task.id,
+            "status": "stopped",
+            "final_output": task.final_output,
+            "agent_outputs": {
+                name: out.get("quality_score")
+                for name, out in values.get("agent_outputs", {}).items()
+            },
+            "subtasks": values.get("subtasks", []),
+        }
     except Exception as exc:
         logger.exception("task %s failed during graph run", task.id)
         hub.emit(task.id, {"type": "error", "detail": f"{traceback.format_exc()[:1000]}", "timestamp": _ts()})
         task.status = "failed"
         db.commit()
         raise HTTPException(status_code=500, detail=f"task execution failed: {str(exc)[:400]}")
+    finally:
+        hub.clear_running(task.id)
 
     values = graph.get_state(config).values
     task.status = "done"
@@ -250,6 +281,7 @@ def run_task(task_id: str, payload: TaskRunRequest, force: bool = False, db: Ses
     graph = _build_graph(team.pattern or "supervisor", agents)
 
     hub.clear(task.id)
+    hub.set_running(task.id)
     task.status = "running"
     db.commit()
 
@@ -288,6 +320,8 @@ def resume_task(task_id: str, payload: TaskResumeRequest, db: Session = Depends(
 
     graph = _build_graph(team.pattern or "supervisor", agents)
 
+    hub.clear(task.id)
+    hub.set_running(task.id)
     task.status = "running"
     db.commit()
     return _stream_and_finish(
@@ -298,6 +332,33 @@ def resume_task(task_id: str, payload: TaskResumeRequest, db: Session = Depends(
         db,
         "Plan was rejected — the revised plan awaits your approval.",
     )
+
+
+@router.post("/tasks/{task_id}/stop")
+def stop_task(task_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Request a running task stop at the next node boundary.
+
+    If a run loop is actively executing, the stop flag makes it abort cleanly
+    and persist whatever the team produced so far. If the status says 'running'
+    but no loop is executing (stuck/ghost run, e.g. after a reload), the task
+    is failed immediately so the UI can move on.
+    """
+    from datetime import datetime, timezone
+
+    task = _get_owned_task(task_id, user.id, db)
+    if task.status != "running":
+        raise HTTPException(status_code=400, detail="task is not running")
+
+    ts = datetime.now(timezone.utc).isoformat()
+    hub.emit(task.id, {"type": "stopping", "timestamp": ts})
+    if not hub.is_running(task.id):
+        task.status = "failed"
+        task.final_output = "Run stopped by the user."
+        db.commit()
+        hub.emit(task.id, {"type": "stopped", "timestamp": ts})
+        return {"task_id": task.id, "status": "stopped", "detail": "stopped (no active run)"}
+    hub.request_stop(task.id)
+    return {"task_id": task.id, "status": "stopping"}
 
 
 @router.get("/tasks/{task_id}/stream")
@@ -321,8 +382,9 @@ async def stream_task(task_id: str, db: Session = Depends(get_db), user: User = 
         for ev in hub.snapshot(task.id):
             yield sse_format(ev)
 
-        # 2) live phase: wait on the hub while the task is running
-        while task.status == "running":
+        # 2) live phase: wait on the hub while the task is running (or pending —
+        #    the status flips to 'running' just after the stream connects)
+        while task.status in ("running", "pending"):
             events = await asyncio.to_thread(hub.wait, task.id, 15.0)
             if not events:
                 yield ": ping\n\n"

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -32,10 +32,10 @@ const createTeamSchema = z.object({
 type CreateTeamFormData = z.infer<typeof createTeamSchema>
 
 const PATTERN_LABELS: Record<string, string> = {
-  sequential: 'Sequential â€” assembly line, one after another',
-  parallel: 'Parallel â€” all agents work simultaneously, then synthesis',
-  debate: 'Debate â€” agents argue for/against, judge picks winner',
-  supervisor: 'Supervisor â€” lead agent coordinates workers',
+  sequential: 'Sequential — assembly line, one after another',
+  parallel: 'Parallel — all agents work simultaneously, then synthesis',
+  debate: 'Debate — agents argue for/against, judge picks winner',
+  supervisor: 'Supervisor — lead agent coordinates workers',
 }
 
 export default function TeamsPage() {
@@ -75,7 +75,7 @@ export default function TeamsPage() {
       setShowCreateModal(false)
       notify.success('Team created')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't create the team â€” ${err}` : "Couldn't create the team")
+      notify.error(typeof err === 'string' ? `Couldn't create the team — ${err}` : "Couldn't create the team")
     } finally {
       setSubmitting(false)
     }
@@ -92,7 +92,7 @@ export default function TeamsPage() {
       await dispatch(deleteTeam(id)).unwrap()
       notify.success('Team deleted')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't delete the team â€” ${err}` : "Couldn't delete the team")
+      notify.error(typeof err === 'string' ? `Couldn't delete the team — ${err}` : "Couldn't delete the team")
     } finally {
       setDeleting(false)
       setDeletingId(null)
@@ -143,9 +143,11 @@ export default function TeamsPage() {
               {agents.length === 0 ? (
                 <EmptyState
                   title="Teams are built from agents"
+                  tint="bg-mod-teams/10 text-mod-teams ring-mod-teams/25"
+                  flow="teams"
                   description={
                     <>
-                      Create a researcher or a critic first â€” then assemble agents into a team
+                      Create a researcher or a critic first — then assemble agents into a team
                       under a collaboration pattern. Start on the{' '}
                       <Link to="/agents" className="font-semibold text-ink underline underline-offset-4">Agents</Link> page.
                     </>
@@ -158,6 +160,8 @@ export default function TeamsPage() {
               ) : (
                 <EmptyState
                   title="No teams yet"
+                  tint="bg-mod-teams/10 text-mod-teams ring-mod-teams/25"
+                  flow="teams"
                   description="Pick a collaboration pattern and choose which agents work together. A task runs against a team, not a single agent."
                 >
                   <Button onClick={openCreate}>Create Team</Button>
@@ -172,8 +176,8 @@ export default function TeamsPage() {
                     <th>Name</th>
                     <th>Pattern</th>
                     <th>Agents</th>
-                    <th>Created</th>
-                    <th className="text-right">Actions</th>
+                    <th className="text-right">Created</th>
+                    <th className="w-20 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -186,7 +190,7 @@ export default function TeamsPage() {
                         </span>
                       </td>
                       <td className="max-w-xs truncate text-ink-muted">{getAgentNames(team.agent_ids)}</td>
-                      <td className="font-mono text-xs text-ink-muted/80 tabular">
+                      <td className="font-mono text-xs text-ink-muted/80 tabular text-right">
                         {new Date(team.created_at).toLocaleDateString()}
                       </td>
                       <td className="text-right">
@@ -222,7 +226,7 @@ export default function TeamsPage() {
               form="create-team-form"
               disabled={submitting || agents.length === 0}
             >
-              {submitting ? 'Creatingâ€¦' : 'Create team'}
+              {submitting ? 'Creating…' : 'Create team'}
             </Button>
           </>
         }
@@ -238,7 +242,7 @@ export default function TeamsPage() {
               placeholder="Research Team"
               className={cn(
                 'h-10 w-full rounded-field border bg-base-100 px-3.5 text-sm text-ink placeholder:text-ink-muted/60',
-                'focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20',
                 errors.name ? 'border-lamp-failed' : 'border-line',
               )}
               {...register('name')}
@@ -253,7 +257,7 @@ export default function TeamsPage() {
             <select
               id="team-pattern"
               className={cn(
-                'h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                'h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20',
               )}
               {...register('pattern')}
             >
@@ -286,7 +290,7 @@ export default function TeamsPage() {
                       <input
                         type="checkbox"
                         value={agent.id}
-                        className="peer size-4 appearance-none rounded-[4px] border border-line bg-base-100 transition-colors checked:border-ink checked:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+                        className="peer size-4 appearance-none rounded-[4px] border border-line bg-base-100 transition-colors checked:border-ink checked:bg-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
                         {...register('agent_ids')}
                       />
                       <svg

@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useDispatch, useSelector } from 'react-redux'
 import { cn } from '../lib/cn'
-import { RouteMark } from './ui/route-mark'
 import { ThemeToggle } from './ui/theme-toggle'
 import { logout } from '../features/auth/authSlice'
 import type { RootState, AppDispatch } from '../store'
+
+const LOGO = '/nexus-logo.png'
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -30,8 +31,8 @@ export function AppNavbar({ active }: { active: string }) {
     <header className="sticky top-0 z-sticky border-b border-base-300 bg-base-100/85 backdrop-blur">
       <nav className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4 sm:px-6" aria-label="Main">
         <Link to="/dashboard" className="flex items-center gap-2.5">
-          <span className="grid size-7 place-items-center rounded-lg bg-primary text-primary-content">
-            <RouteMark className="size-4.5" />
+          <span className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-line">
+            <img src={LOGO} alt="NEXUS logo" className="size-7 object-cover" />
           </span>
           <span className="text-sm font-bold tracking-[0.14em] text-ink">NEXUS</span>
         </Link>
@@ -44,7 +45,7 @@ export function AppNavbar({ active }: { active: string }) {
                 className={cn(
                   'rounded-field px-3 py-1.5 text-sm font-semibold transition-colors',
                   active === item.to
-                    ? 'bg-console text-ink ring-1 ring-inset ring-base-300'
+                    ? 'bg-accent/10 text-accent ring-1 ring-inset ring-accent/25'
                     : 'text-ink-muted hover:bg-console hover:text-ink',
                 )}
                 aria-current={active === item.to ? 'page' : undefined}
@@ -120,7 +121,7 @@ export function AppNavbar({ active }: { active: string }) {
                       className={cn(
                         'block rounded-field px-3 py-2 text-sm font-semibold transition-colors',
                         active === item.to
-                          ? 'bg-console text-ink'
+                          ? 'bg-accent/10 text-accent'
                           : 'text-ink-muted hover:bg-console hover:text-ink',
                       )}
                     >

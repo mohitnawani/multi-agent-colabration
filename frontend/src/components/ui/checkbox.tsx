@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes } from 'react'
+﻿import type { InputHTMLAttributes } from 'react'
 import { cn } from '../../lib/cn'
 
 type CheckboxProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & {
@@ -16,7 +16,7 @@ export function Checkbox({ label, id, invalid, className, ...rest }: CheckboxPro
           className={cn(
             'peer size-4 appearance-none rounded-[4px] border bg-base-100 transition-colors',
             'checked:border-ink checked:bg-ink',
-            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
             'disabled:opacity-60',
             invalid ? 'border-lamp-failed' : 'border-line',
           )}

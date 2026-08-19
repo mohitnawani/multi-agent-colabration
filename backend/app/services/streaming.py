@@ -23,12 +23,16 @@ class TaskEventHub:
 
     def __init__(self) -> None:
         self._events: dict[str, list[dict]] = {}
+        self._stop: set[str] = set()
+        self._running: set[str] = set()
         self._cond = threading.Condition()
 
     def clear(self, task_id: str) -> None:
         """Drop stored events — called once when a fresh run starts."""
         with self._cond:
             self._events[task_id] = []
+            self._stop.discard(task_id)
+            self._running.discard(task_id)
 
     def emit(self, task_id: str, event: dict) -> None:
         with self._cond:
@@ -46,6 +50,30 @@ class TaskEventHub:
             start = len(self._events.get(task_id, []))
             self._cond.wait(timeout)
             return list(self._events.get(task_id, [])[start:])
+
+    def request_stop(self, task_id: str) -> None:
+        """Ask the run loop to stop at the next node boundary (user hit Stop)."""
+        with self._cond:
+            self._stop.add(task_id)
+
+    def stop_requested(self, task_id: str) -> bool:
+        with self._cond:
+            return task_id in self._stop
+
+    def set_running(self, task_id: str) -> None:
+        """Mark that a run loop is actively executing for this task."""
+        with self._cond:
+            self._running.add(task_id)
+
+    def clear_running(self, task_id: str) -> None:
+        with self._cond:
+            self._running.discard(task_id)
+
+    def is_running(self, task_id: str) -> bool:
+        """True if a run loop is actively executing — used to tell a live run
+        apart from a ghost/stuck 'running' status with no loop behind it."""
+        with self._cond:
+            return task_id in self._running
 
 
 hub = TaskEventHub()
@@ -70,7 +98,14 @@ def make_event(node: str, update: dict) -> dict:
     summary = ""
     messages = update.get("messages") or []
     if messages and isinstance(messages[-1], dict):
-        summary = (messages[-1].get("content") or "")[:200]
+        raw = messages[-1].get("content") or ""
+        if isinstance(raw, list):
+            # LangChain may emit content as a list of content blocks — flatten it.
+            raw = " ".join(
+                block.get("text", str(block)) if isinstance(block, dict) else str(block)
+                for block in raw
+            )
+        summary = str(raw)[:2000]
     elif update.get("agent_outputs"):
         name, out = next(iter(update["agent_outputs"].items()))
         score = out.get("quality_score")

@@ -62,11 +62,11 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[400px] px-6 py-10 sm:px-10 sm:py-14">
+    <div className="mx-auto w-full max-w-[400px] px-6 py-10 sm:px-10">
       <h1 className="text-2xl font-semibold tracking-tight text-ink">Create your account</h1>
       <p className="mt-1.5 text-sm text-ink-muted">Set up your workspace in under a minute</p>
 
-      <div className="mt-8 space-y-7">
+      <div className="mt-6 space-y-4">
         {error && (
           <div
             className="flex items-start gap-2.5 rounded-field bg-lamp-failed/10 px-4 py-3 text-sm text-lamp-failed ring-1 ring-inset ring-lamp-failed/25"
@@ -77,7 +77,7 @@ export function RegisterForm() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
           <div>
             <Label htmlFor="reg-name">Full name</Label>
             <div className="mt-1.5">

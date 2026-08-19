@@ -142,7 +142,7 @@ export function FlowSchematic({
                   x={node.x}
                   y={node.y - PILL_H / 2 - 10}
                   textAnchor="middle"
-                  fontFamily="'Fira Sans', sans-serif"
+                  fontFamily="'Inter', sans-serif"
                   fontSize="11"
                   fontWeight={600}
                   letterSpacing="0.4"
@@ -190,7 +190,7 @@ export function FlowSchematic({
                   x={node.x + 2}
                   y={node.y + 3.5}
                   textAnchor="middle"
-                  fontFamily="'Fira Sans', sans-serif"
+                  fontFamily="'Inter', sans-serif"
                   fontSize="11"
                   fontWeight={isActive ? 600 : 500}
                   letterSpacing="0.4"

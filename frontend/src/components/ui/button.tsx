@@ -40,7 +40,7 @@ export function Button({
         'inline-flex items-center justify-center rounded-field font-semibold select-none',
         'transition-[background-color,border-color,color,transform] duration-150',
         'active:scale-[0.98]',
-        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+        'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
         'disabled:opacity-45 disabled:pointer-events-none',
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],

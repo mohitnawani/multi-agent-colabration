@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes } from 'react'
+﻿import type { InputHTMLAttributes } from 'react'
 import { cn } from '../../lib/cn'
 
 type InputProps = InputHTMLAttributes<HTMLInputElement> & {
@@ -13,7 +13,7 @@ export function Input({ invalid, className, ...rest }: InputProps) {
         'placeholder:text-ink-muted/60 transition-[border-color,box-shadow] duration-150',
         invalid
           ? 'border-lamp-failed focus:border-lamp-failed focus:ring-2 focus:ring-lamp-failed/20'
-          : 'border-line focus:border-ink focus:ring-2 focus:ring-ink/15',
+          : 'border-line focus:border-accent focus:ring-2 focus:ring-accent/20',
         'focus:outline-none disabled:opacity-60',
         className,
       )}

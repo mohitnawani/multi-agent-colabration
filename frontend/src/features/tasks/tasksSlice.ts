@@ -101,6 +101,18 @@ export const fetchTaskOutputs = createAsyncThunk(
   },
 )
 
+export const stopTask = createAsyncThunk(
+  'tasks/stopTask',
+  async (taskId: string, { rejectWithValue }) => {
+    try {
+      const res = await api.post(`/tasks/${taskId}/stop`)
+      return res.data as { task_id: string; status: string }
+    } catch (err: any) {
+      return rejectWithValue(err.response?.data?.detail || 'Failed to stop task')
+    }
+  },
+)
+
 const tasksSlice = createSlice({
   name: 'tasks',
   initialState,
@@ -145,7 +157,7 @@ const tasksSlice = createSlice({
         state.runResult = action.payload
         const idx = state.tasks.findIndex((t) => t.id === action.payload.task_id)
         if (idx !== -1) {
-          state.tasks[idx].status = action.payload.status
+          state.tasks[idx].status = action.payload.status === 'stopped' ? 'failed' : action.payload.status
           state.tasks[idx].final_output = action.payload.final_output
           state.tasks[idx].agent_outputs = action.payload.agent_outputs
           state.tasks[idx].subtasks = action.payload.subtasks
@@ -168,7 +180,7 @@ const tasksSlice = createSlice({
         state.runResult = action.payload
         const idx = state.tasks.findIndex((t) => t.id === action.payload.task_id)
         if (idx !== -1) {
-          state.tasks[idx].status = action.payload.status
+          state.tasks[idx].status = action.payload.status === 'stopped' ? 'failed' : action.payload.status
           state.tasks[idx].final_output = action.payload.final_output
           state.tasks[idx].agent_outputs = action.payload.agent_outputs
           state.tasks[idx].subtasks = action.payload.subtasks

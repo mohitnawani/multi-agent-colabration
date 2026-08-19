@@ -4,6 +4,8 @@ import { AgentAvatar } from '../AgentAvatar'
 import { StatusBadge } from '../StatusBadge'
 import { Skeleton } from '../Skeleton'
 import { Button } from './button'
+import { MarkdownView } from './markdown'
+import { useTaskStream } from './use-task-stream'
 
 type StationState = 'idle' | 'running' | 'done' | 'failed' | 'review'
 
@@ -23,32 +25,44 @@ const LAMP_FOR: Record<StationState, string> = {
   review: 'lamp-review',
 }
 
+// Graph node names -> run-route stations
+const NODE_TO_STATION: Record<string, string> = {
+  supervisor: 'supervisor',
+  approval: 'gate',
+  reviewer: 'gate',
+  reassign: 'gate',
+  synthesis: 'end',
+}
+
+function stationForNode(node: string, stationIds: string[]): string | null {
+  const mapped = NODE_TO_STATION[node]
+  if (mapped) return mapped
+  if (node.startsWith('tools_')) {
+    const agent = node.slice(6)
+    return stationIds.includes(agent) ? agent : 'agents'
+  }
+  return stationIds.includes(node) ? node : null
+}
+
 function buildStations(task: Task, agentNames: string[], outputs: AgentOutput[]): Station[] {
   const status = task.status
   const stations: Station[] = [
-    { id: 'start', label: 'Start', sub: 'workflow entry', state: status === 'failed' ? 'done' : 'done' },
+    { id: 'start', label: 'Start', sub: 'workflow entry', state: 'done' },
     {
       id: 'supervisor',
       label: task.team_id ? 'Supervisor' : 'Run',
       sub: 'coordination',
-      state: status === 'failed' ? 'done' : status === 'running' ? 'running' : 'done',
+      state: status === 'running' ? 'running' : status === 'pending' ? 'idle' : 'done',
     },
   ]
 
-  const names = outputs.length > 0 ? outputs.map((o) => o.agent_name) : agentNames
-  if (names.length > 0) {
+  const names = (agentNames.length > 0 ? agentNames : outputs.map((o) => o.agent_name)).filter(Boolean)
+  for (const name of names) {
     stations.push({
-      id: 'agents',
-      label: names.length > 1 ? `${names[0]} +${names.length - 1}` : names[0],
-      sub: names.length > 1 ? `${names.length} workers` : 'worker',
-      state:
-        status === 'failed' || status === 'done'
-          ? 'done'
-          : status === 'running'
-            ? 'running'
-            : status === 'awaiting_review'
-              ? 'done'
-              : 'idle',
+      id: name,
+      label: name,
+      sub: 'worker',
+      state: status === 'done' || status === 'failed' ? 'done' : 'idle',
     })
   }
 
@@ -86,6 +100,9 @@ export function TranscriptView({
   outputsLoading,
   outputsError,
   runningTaskId,
+  streaming,
+  onStop,
+  onStreamDone,
   onReRun,
   onApprove,
   onReject,
@@ -98,12 +115,19 @@ export function TranscriptView({
   outputsLoading: boolean
   outputsError: string | null
   runningTaskId: string | null
+  streaming: boolean
+  onStop: () => void
+  onStreamDone: () => void
   onReRun: (taskId: string) => void
   onApprove: (taskId: string) => void
   onReject: (taskId: string) => void
 }) {
+  const { events, activeNode, stopping } = useTaskStream(task.id, { enabled: streaming, onDone: onStreamDone })
   const stations = buildStations(task, agentNames, outputs)
   const isRunningThis = runningTaskId === task.id
+
+  const stationIds = stations.map((s) => s.id)
+  const activeStation = streaming && activeNode ? stationForNode(activeNode, stationIds) : null
 
   return (
     <div className="space-y-5">
@@ -119,66 +143,134 @@ export function TranscriptView({
             {new Date(task.created_at).toLocaleDateString()}
           </p>
         </div>
-        <StatusBadge status={task.status} spinner={isRunningThis} />
+        <div className="flex items-center gap-2">
+          {streaming && (
+            <Button size="sm" variant="danger" onClick={onStop} disabled={stopping}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1.5" /></svg>
+              {stopping ? 'Stopping…' : 'Stop run'}
+            </Button>
+          )}
+          <StatusBadge status={task.status} spinner={isRunningThis} />
+        </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[230px_1fr]">
-        {/* Run schematic — the hand-off visible */}
-        <div className="rounded-field border border-base-300 bg-console/60 p-4">
+      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+        {/* Run route — sticky; does not scroll with the transcript body */}
+        <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[56dvh] lg:overflow-y-auto rounded-field border border-base-300 bg-console/60 p-4">
           <p className="mb-4 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
             Run route
           </p>
           <ol className="space-y-0">
-            {stations.map((s, i) => (
-              <li key={s.id} className="relative flex items-start gap-3 pb-5 last:pb-0">
-                {i < stations.length - 1 && (
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'absolute left-[3.5px] top-4 h-full w-px',
-                      s.state === 'done' || s.state === 'running'
-                        ? s.state === 'running'
-                          ? 'bg-lamp-running/60'
-                          : 'bg-lamp-done/40'
-                        : 'bg-base-300',
-                    )}
-                  />
-                )}
-                <span
-                  className={cn(
-                    'lamp mt-1',
-                    s.gate ? 'size-2.5 rotate-45 rounded-[2px]' : undefined,
-                    LAMP_FOR[s.state],
+            {stations.map((s, i) => {
+              const state: StationState =
+                streaming && s.id === activeStation ? 'running' : s.state
+              return (
+                <li key={s.id} className="relative flex items-start gap-3 pb-5 last:pb-0">
+                  {i < stations.length - 1 && (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'absolute left-[3.5px] top-4 h-full w-px',
+                        state === 'done' || state === 'running'
+                          ? state === 'running'
+                            ? 'bg-lamp-running/60'
+                            : 'bg-lamp-done/40'
+                          : 'bg-base-300',
+                      )}
+                    />
                   )}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0">
-                  <p
+                  <span
                     className={cn(
-                      'text-xs font-semibold',
-                      s.state === 'done'
-                        ? 'text-ink'
-                        : s.state === 'running'
-                          ? 'text-lamp-running'
-                          : s.state === 'failed'
-                            ? 'text-lamp-failed'
-                            : s.state === 'review'
-                              ? 'text-lamp-review'
-                              : 'text-ink-muted',
+                      'lamp mt-1',
+                      s.gate ? 'size-2.5 rotate-45 rounded-[2px]' : undefined,
+                      state === 'running' ? 'lamp-running' : LAMP_FOR[s.state],
                     )}
-                  >
-                    {s.label}
-                  </p>
-                  <p className="truncate font-mono text-[10px] text-ink-muted/80">{s.sub}</p>
-                </div>
-              </li>
-            ))}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0">
+                    <p
+                      className={cn(
+                        'text-xs font-semibold',
+                        state === 'done'
+                          ? 'text-ink'
+                          : state === 'running'
+                            ? 'text-lamp-running'
+                            : state === 'failed'
+                              ? 'text-lamp-failed'
+                              : state === 'review'
+                                ? 'text-lamp-review'
+                                : 'text-ink-muted',
+                      )}
+                    >
+                      {s.label}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-ink-muted/80">
+                      {streaming && s.id === activeStation ? 'working…' : s.sub}
+                    </p>
+                  </div>
+                </li>
+              )
+            })}
           </ol>
         </div>
 
         {/* Transcript body */}
         <div className="min-w-0 space-y-5">
-          {task.status === 'running' && (
+          {streaming && (
+            <section>
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
+                Live hand-offs
+              </h4>
+              {stopping && (
+                <div className="mb-3 flex items-start gap-3 rounded-field bg-lamp-running/8 p-4 ring-1 ring-inset ring-lamp-running/20">
+                  <span className="lamp lamp-running mt-1" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-semibold text-lamp-running">Stopping run…</p>
+                    <p className="mt-0.5 text-sm text-ink-muted">
+                      The team will stop at the next hand-off. Whatever they produced is kept.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {events.length === 0 ? (
+                <div className="flex items-center gap-3 rounded-field border border-dashed border-base-300 bg-console/60 p-4 text-sm text-ink-muted">
+                  <span className="size-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" aria-hidden="true" />
+                  Waiting for the team to start producing output…
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {events.map((ev, i) => {
+                    const node = ev.node || 'System'
+                    return (
+                      <li key={i} className="overflow-hidden rounded-field border border-base-300">
+                        <div className="flex flex-wrap items-center gap-2.5 border-b border-base-300 bg-console/60 px-4 py-2.5">
+                          <AgentAvatar name={node} className="size-7 text-[10px]" />
+                          <span className="text-sm font-semibold text-ink">{node}</span>
+                          {ev.phase && (
+                            <span className="rounded bg-ink/5 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-muted ring-1 ring-inset ring-line">
+                              {ev.phase}
+                            </span>
+                          )}
+                          <span className="ml-auto font-mono text-[11px] text-ink-muted/80 tabular">
+                            {new Date(ev.timestamp ?? Date.now()).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <div className="max-h-56 overflow-y-auto px-4 py-3">
+                          {ev.summary ? (
+                            <MarkdownView>{ev.summary}</MarkdownView>
+                          ) : (
+                            <p className="text-sm italic text-ink-muted">working…</p>
+                          )}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {task.status === 'running' && !streaming && (
             <div className="flex items-start gap-3 rounded-field bg-lamp-running/8 p-4 ring-1 ring-inset ring-lamp-running/20">
               <span className="lamp lamp-running mt-1" aria-hidden="true" />
               <div>
@@ -242,8 +334,8 @@ export function TranscriptView({
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
                 Final output
               </h4>
-              <div className="max-h-64 overflow-y-auto rounded-field border border-base-300 bg-console/60 p-4 text-sm leading-relaxed whitespace-pre-wrap text-ink">
-                {task.final_output}
+              <div className="max-h-64 overflow-y-auto rounded-field border border-base-300 bg-console/60 p-4">
+                <MarkdownView>{task.final_output}</MarkdownView>
               </div>
             </section>
           )}
@@ -290,8 +382,12 @@ export function TranscriptView({
                             </span>
                           )}
                         </div>
-                        <div className="max-h-56 overflow-y-auto px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap text-ink-muted">
-                          {out.content || 'No content.'}
+                        <div className="max-h-56 overflow-y-auto px-4 py-3">
+                          {out.content ? (
+                            <MarkdownView>{out.content}</MarkdownView>
+                          ) : (
+                            <p className="text-sm text-ink-muted">No content.</p>
+                          )}
                         </div>
                       </li>
                     )

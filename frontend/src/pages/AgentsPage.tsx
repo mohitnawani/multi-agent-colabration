@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
@@ -37,12 +37,12 @@ const createAgentSchema = z.object({
 type CreateAgentFormData = z.infer<typeof createAgentSchema>
 
 const TEMPLATE_LABELS: Record<string, string> = {
-  researcher: 'Researcher â€” web search, note taking',
-  writer: 'Writer â€” clear, structured content',
-  analyst: 'Analyst â€” data analysis, patterns, risks',
-  critic: 'Critic â€” find weaknesses, fact-check',
-  developer: 'Developer â€” clean, idiomatic code',
-  designer: 'Designer â€” creative, visual ideas',
+  researcher: 'Researcher — web search, note taking',
+  writer: 'Writer — clear, structured content',
+  analyst: 'Analyst — data analysis, patterns, risks',
+  critic: 'Critic — find weaknesses, fact-check',
+  developer: 'Developer — clean, idiomatic code',
+  designer: 'Designer — creative, visual ideas',
 }
 
 export default function AgentsPage() {
@@ -93,7 +93,7 @@ export default function AgentsPage() {
       setShowCreateModal(false)
       notify.success('Agent created')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't create the agent â€” ${err}` : "Couldn't create the agent")
+      notify.error(typeof err === 'string' ? `Couldn't create the agent — ${err}` : "Couldn't create the agent")
     } finally {
       setSubmitting(false)
     }
@@ -110,7 +110,7 @@ export default function AgentsPage() {
       await dispatch(deleteAgent(id)).unwrap()
       notify.success('Agent deleted')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't delete the agent â€” ${err}` : "Couldn't delete the agent")
+      notify.error(typeof err === 'string' ? `Couldn't delete the agent — ${err}` : "Couldn't delete the agent")
     } finally {
       setDeleting(false)
       setDeletingId(null)
@@ -158,9 +158,11 @@ export default function AgentsPage() {
             </div>
           ) : agents.length === 0 ? (
             <div className="surface">
-              <EmptyState
+<EmptyState
                 title="No agents yet"
-                description="Start from a template. Each template sets a role, tools, and a base prompt â€” you can override the prompt after."
+                tint="bg-mod-agents/10 text-mod-agents ring-mod-agents/25"
+                flow="agents"
+                description="Start from a template. Each template sets a role, tools, and a base prompt — you can override the prompt after."
               >
                 <Button onClick={openCreate}>Create Agent</Button>
               </EmptyState>
@@ -192,7 +194,7 @@ export default function AgentsPage() {
                     {agent.system_prompt || 'No custom prompt'}
                   </p>
 
-                  <div className="mb-4 flex flex-wrap gap-1.5">
+                  <div className="mb-4 mt-0.5 flex flex-wrap gap-2">
                     {agent.tools.map((tool) => (
                       <ToolTag key={tool} tool={tool} />
                     ))}
@@ -228,7 +230,7 @@ export default function AgentsPage() {
           <>
             <Button variant="ghost" onClick={() => setShowCreateModal(false)}>Cancel</Button>
             <Button type="submit" form="create-agent-form" disabled={submitting}>
-              {submitting ? 'Creatingâ€¦' : 'Create agent'}
+              {submitting ? 'Creating…' : 'Create agent'}
             </Button>
           </>
         }
@@ -240,7 +242,7 @@ export default function AgentsPage() {
             </label>
             <select
               id="agent-template"
-              className="h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15"
+              className="h-10 w-full rounded-field border border-line bg-base-100 px-3 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20"
               {...register('template_key')}
             >
               {templates.map((t) => (
@@ -262,7 +264,7 @@ export default function AgentsPage() {
               placeholder="My Researcher"
               className={cn(
                 'h-10 w-full rounded-field border bg-base-100 px-3.5 text-sm text-ink placeholder:text-ink-muted/60',
-                'focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20',
                 errors.name ? 'border-lamp-failed' : 'border-line',
               )}
               {...register('name')}
@@ -278,7 +280,7 @@ export default function AgentsPage() {
               id="agent-prompt"
               className={cn(
                 'min-h-[90px] w-full rounded-field border bg-base-100 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted/60',
-                'focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/15',
+                'focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/20',
                 'border-line',
               )}
               placeholder="Override the template's default prompt..."

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 /* daisyUI theme set — light (console) is the default; dark (control room) is defined
@@ -49,9 +49,9 @@
   --color-secondary-content: #10151f;
   --color-accent: #7fa6e8;
   --color-accent-content: #10151f;
-  --color-base-100: #171e2b; /* panel */
-  --color-base-200: #10151f; /* canvas */
-  --color-base-300: #232c3d; /* line */
+  --color-base-100: #141928; /* card */
+  --color-base-200: #0b0e16; /* page canvas */
+  --color-base-300: #1c2333; /* hover / nested */
   --color-base-content: #e8ecf3;
   --color-neutral: #93a0b3;
   --color-neutral-content: #10151f;
@@ -70,7 +70,8 @@
 
 /* Design tokens (Tailwind v4 @theme) — every color, face and scale the UI uses */
 @theme {
-  --font-sans: "Fira Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Palette */
@@ -80,12 +81,18 @@
   --color-sheet: #ffffff;
   --color-line: #d8dee7;
 
-  /* Signal lamps — every hue names an orchestration state */
-  --color-lamp-idle: #2e5ba6;
+  /* Signal lamps — every hue names an orchestration state.
+     Blue is NOT a status: it is reserved for interactive/navigation (accent). */
+  --color-lamp-idle: #64748b; /* pending — neutral slate */
   --color-lamp-running: #a85b00;
   --color-lamp-done: #157a4b;
   --color-lamp-failed: #b42318;
   --color-lamp-review: #6d4ac4;
+
+  /* Module identity — the app's triad: Teams violet, Agents teal, Tasks green */
+  --color-mod-teams: #6d4ac4;
+  --color-mod-agents: #0f766e;
+  --color-mod-tasks: #157a4b;
 
   /* Control room — dark instrument panel (signature only) */
   --color-panel: #10151f;
@@ -125,6 +132,8 @@
   --text-2xl--line-height: 1.25;
   --text-3xl: 1.875rem;
   --text-3xl--line-height: 1.2;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 1.15;
 
 }
 
@@ -147,6 +156,16 @@
     @apply bg-base-200 text-base-content font-sans antialiased;
   }
 
+  /* AI/tech pairing: Space Grotesk for headings, Inter for UI text */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+  }
+
   /* Dark theme — remap the console tokens onto the control-room register so every
      text-ink / bg-console / ring-line utility adapts without per-component work. */
   [data-theme="dark"] {
@@ -155,13 +174,23 @@
     --color-console: var(--color-panel);
     --color-sheet: var(--color-panel-2);
     --color-line: var(--color-panel-line);
+    /* Brighter lamp variants for the dark field */
+    --color-lamp-idle: #8ea0b5;
+    --color-lamp-running: #e0a32e;
+    --color-lamp-done: #4bbf8a;
+    --color-lamp-failed: #ff8a80;
+    --color-lamp-review: #b9a3f2;
+    /* Module triad — lifted for dark */
+    --color-mod-teams: #b9a3f2;
+    --color-mod-agents: #5fd0c7;
+    --color-mod-tasks: #7fd4ab;
   }
 
   /* Keep the control-room panel a step darker than the dark canvas */
   [data-theme="dark"] .panel {
-    --panel: #0b0f16;
-    --panel-2: #121a26;
-    --panel-line: #1e2635;
+    --panel: #0b0e16;
+    --panel-2: #141928;
+    --panel-line: #1c2333;
     --panel-text: #e8ecf3;
     --panel-muted: #93a0b3;
   }
@@ -185,9 +214,9 @@
     border: 3px solid var(--color-console);
   }
 
-  /* Visible, consistent keyboard focus */
+  /* Visible, consistent keyboard focus — accent is the interactive color */
   :focus-visible {
-    outline: 2px solid var(--color-ink);
+    outline: 2px solid var(--color-accent);
     outline-offset: 2px;
   }
 }
@@ -231,8 +260,33 @@
   .status-pill-idle { color: var(--color-lamp-idle); background: color-mix(in srgb, var(--color-lamp-idle) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-idle) 22%, transparent); }
   .status-pill-running { color: var(--color-lamp-running); background: color-mix(in srgb, var(--color-lamp-running) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-running) 22%, transparent); }
   .status-pill-done { color: var(--color-lamp-done); background: color-mix(in srgb, var(--color-lamp-done) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-done) 22%, transparent); }
-  .status-pill-failed { color: var(--color-lamp-failed); background: color-mix(in srgb, var(--color-lamp-failed) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-failed) 22%, transparent); }
+  /* Failed carries the most weight — the state a user must notice first */
+  .status-pill-failed { color: var(--color-lamp-failed); background: color-mix(in srgb, var(--color-lamp-failed) 14%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-failed) 38%, transparent); font-weight: 700; }
   .status-pill-review { color: var(--color-lamp-review); background: color-mix(in srgb, var(--color-lamp-review) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-review) 22%, transparent); }
+
+  /* Legend chips — sit on the dark canvas art in both themes, so the values are fixed */
+  .legend-chip {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset;
+  }
+  .legend-chip .lamp {
+    background: currentColor;
+  }
+  .legend-idle { color: #8ea0b5; background: rgb(142 160 181 / 12%); --tw-ring-color: rgb(142 160 181 / 30%); }
+  .legend-running { color: #e0a32e; background: rgb(224 163 46 / 12%); --tw-ring-color: rgb(224 163 46 / 30%); }
+  .legend-done { color: #4bbf8a; background: rgb(75 191 138 / 12%); --tw-ring-color: rgb(75 191 138 / 30%); }
+  .legend-failed { color: #ff8a80; background: rgb(255 138 128 / 12%); --tw-ring-color: rgb(255 138 128 / 30%); }
+
+  /* Markdown (LLM responses) — fenced code blocks without a language tag must not
+     inherit the inline-chip styling; descendant rule outranks the utility classes */
+  .markdown pre code {
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+    color: inherit;
+    font-weight: 400;
+    font-size: 0.75rem;
+  }
 
   /* Role identity chips — one hue per role family */
   .role-chip {
@@ -296,6 +350,23 @@
   --lamp-review: #b9a3f2;
   background: var(--panel);
   color: var(--panel-text);
+}
+
+/* ---------- Auth canvas (slanted art panel) ---------- */
+/* Right edge: tilted toward the right at top, receding left at the bottom,
+   with the slant line bending toward the right (control points > 100%). */
+.auth-slant {
+  clip-path: path("M 100% 0 C 104.5% 42%, 99% 62%, 88% 100% L 0 100% L 0 0 Z");
+}
+
+/* Auth page background — same slant echoed as faint diagonal lines */
+.auth-bg {
+  background-color: var(--color-console);
+  background-image: repeating-linear-gradient(
+    104deg,
+    transparent 0 4rem,
+    color-mix(in srgb, var(--color-ink) 4%, transparent) 4rem 4.15rem
+  );
 }
 
 /* ---------- Route schematic (signature) ---------- */
