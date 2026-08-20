@@ -54,7 +54,7 @@ export function LoginForm() {
       : error || null
 
   return (
-    <div className="mx-auto w-full max-w-[400px] px-6 py-10 sm:px-10">
+    <div className="mx-auto w-full max-w-[440px]">
       <h1 className="text-2xl font-semibold tracking-tight text-ink">Welcome back</h1>
       <p className="mt-1.5 text-sm text-ink-muted">Sign in to manage your agent teams</p>
 

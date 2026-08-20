@@ -3,6 +3,7 @@ import { DelegationTrail } from '../ui/delegation-trail'
 import type { TrailStage } from '../ui/delegation-trail'
 
 const LOGO = '/nexus-logo.png'
+const CANVAS_ART = '/abstract-hand-painted-modern-art-canvas-design-background_1048-19282.webp'
 
 const AMBIENT_STAGES: TrailStage[] = [
   { id: 'task', label: 'Task', sub: 'incoming' },
@@ -32,26 +33,29 @@ function Wordmark() {
 }
 
 /**
- * Auth canvas - split 55/45. Left: the Delegation Trail rendered large and
- * ambient as the thesis (this is the product, not a stock illustration).
- * Right: the auth panel on bg-panel. Flat panels, hairline borders, no
- * gradients or glassmorphism.
+ * Auth canvas - split 55/45. Left: the abstract canvas art full-bleed behind
+ * the Delegation Trail rendered large and ambient as the thesis (this is the
+ * product, not a stock illustration). Right: the auth panel on bg-panel.
+ * Flat panels, hairline borders, no gradients or glassmorphism. A dark scrim
+ * keeps the wordmark, headline, and trail legible over the art.
  */
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-dvh bg-bg-base lg:grid-cols-[55fr_45fr]">
-      {/* Left - ambient Delegation Trail */}
+      {/* Left - canvas art + ambient Delegation Trail */}
       <div className="relative hidden overflow-hidden border-r border-border lg:block">
-        {/* Faint instrument-grid texture */}
+        <img
+          src={CANVAS_ART}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        {/* Scrim - heavier on the left where the copy sits, lighter on the right */}
         <div
           aria-hidden="true"
-          className="absolute inset-0 opacity-[0.35]"
-          style={{
-            backgroundImage:
-              'repeating-linear-gradient(0deg, rgba(38,44,56,0.5) 0 1px, transparent 1px 64px), repeating-linear-gradient(90deg, rgba(38,44,56,0.5) 0 1px, transparent 1px 64px)',
-          }}
+          className="absolute inset-0 bg-gradient-to-r from-bg-base/85 via-bg-base/60 to-bg-base/35"
         />
-        <div className="relative flex h-full flex-col justify-between p-10">
+        <div className="relative z-10 flex h-full flex-col justify-between p-10">
           <Wordmark />
 
           <div className="max-w-lg">
@@ -69,7 +73,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </p>
           </div>
 
-          <div className="rounded-[8px] border border-border bg-bg-panel/80 p-6">
+          <div className="rounded-[8px] border border-border bg-bg-panel/90 p-6">
             <DelegationTrail
               stages={AMBIENT_STAGES}
               size="full"
@@ -80,12 +84,23 @@ export function AuthLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
 
-      {/* Right - auth panel */}
-      <div className="flex flex-col bg-bg-panel">
-        <div className="flex items-center justify-between p-4 lg:hidden">
-          <Wordmark />
+      {/* Right - auth panel, fills the frame without scrolling */}
+      <div className="flex h-dvh flex-col overflow-y-auto bg-bg-panel">
+        <div className="relative overflow-hidden lg:hidden">
+          <img
+            src={CANVAS_ART}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div aria-hidden="true" className="absolute inset-0 bg-bg-base/70" />
+          <div className="relative z-10 p-4">
+            <Wordmark />
+          </div>
         </div>
-        <div className="my-auto w-full max-w-[400px] px-6 py-10 sm:px-10">{children}</div>
+        <div className="my-auto flex w-full flex-1 items-center justify-center px-6 py-8 sm:px-10">
+          <div className="w-full max-w-[440px]">{children}</div>
+        </div>
       </div>
     </div>
   )

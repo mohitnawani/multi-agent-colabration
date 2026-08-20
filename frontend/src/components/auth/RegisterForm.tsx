@@ -63,7 +63,7 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[400px] px-6 py-10 sm:px-10">
+    <div className="mx-auto w-full max-w-[440px]">
       <h1 className="text-2xl font-semibold tracking-tight text-ink">Create your account</h1>
       <p className="mt-1.5 text-sm text-ink-muted">Set up your workspace in under a minute</p>
 
@@ -79,35 +79,38 @@ export function RegisterForm() {
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
-          <div>
-            <Label htmlFor="reg-name">Full name</Label>
-            <div className="mt-1.5">
-              <Input
-                id="reg-name"
-                type="text"
-                placeholder="Jane Doe"
-                autoComplete="name"
-                invalid={!!errors.name}
-                disabled={loading}
-                {...registerField('name')}
-              />
-              <FieldError message={errors.name?.message} />
+          {/* Name + email side by side so the form breathes horizontally */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="reg-name">Full name</Label>
+              <div className="mt-1.5">
+                <Input
+                  id="reg-name"
+                  type="text"
+                  placeholder="Jane Doe"
+                  autoComplete="name"
+                  invalid={!!errors.name}
+                  disabled={loading}
+                  {...registerField('name')}
+                />
+                <FieldError message={errors.name?.message} />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <Label htmlFor="reg-email">Email</Label>
-            <div className="mt-1.5">
-              <Input
-                id="reg-email"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
-                invalid={!!errors.email}
-                disabled={loading}
-                {...registerField('email')}
-              />
-              <FieldError message={errors.email?.message} />
+            <div>
+              <Label htmlFor="reg-email">Email</Label>
+              <div className="mt-1.5">
+                <Input
+                  id="reg-email"
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  invalid={!!errors.email}
+                  disabled={loading}
+                  {...registerField('email')}
+                />
+                <FieldError message={errors.email?.message} />
+              </div>
             </div>
           </div>
 
