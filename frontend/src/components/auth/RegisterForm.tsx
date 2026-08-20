@@ -19,6 +19,7 @@ export function RegisterForm() {
   const { loading, error } = useSelector((state: RootState) => state.auth)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [passwordFocused, setPasswordFocused] = useState(false)
 
   const {
     register: registerField,
@@ -121,7 +122,10 @@ export function RegisterForm() {
                 className="pr-11"
                 invalid={!!errors.password}
                 disabled={loading}
-                {...registerField('password')}
+                onFocus={() => setPasswordFocused(true)}
+                {...registerField('password', {
+                  onBlur: () => setPasswordFocused(false),
+                })}
               />
               <button
                 type="button"
@@ -137,34 +141,37 @@ export function RegisterForm() {
                 )}
               </button>
             </div>
-            <p
-              className={cn(
-                'mt-1.5 flex items-center gap-1.5 text-xs transition-colors',
-                passwordChecks.every((c) => c.met) ? 'font-semibold text-lamp-done' : 'text-ink-muted',
-              )}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            {/* Progressive disclosure - rules only appear while the field is focused */}
+            {passwordFocused && (
+              <p
                 className={cn(
-                  'transition-opacity',
-                  passwordChecks.every((c) => c.met) ? 'opacity-100' : 'opacity-0',
+                  'mt-1.5 flex items-center gap-1.5 text-xs transition-colors',
+                  passwordChecks.every((c) => c.met) ? 'font-semibold text-lamp-done' : 'text-ink-muted',
                 )}
               >
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-              {passwordChecks.every((c) => c.met)
-                ? 'Password looks good'
-                : `Use ${passwordChecks.filter((c) => !c.met).map((c) => c.label.toLowerCase()).join(', ')}`}
-            </p>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  className={cn(
+                    'transition-opacity',
+                    passwordChecks.every((c) => c.met) ? 'opacity-100' : 'opacity-0',
+                  )}
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                {passwordChecks.every((c) => c.met)
+                  ? 'Password looks good'
+                  : `Use ${passwordChecks.filter((c) => !c.met).map((c) => c.label.toLowerCase()).join(', ')}`}
+              </p>
+            )}
             <FieldError message={errors.password?.message} />
           </div>
 
@@ -209,7 +216,7 @@ export function RegisterForm() {
             <FieldError message={errors.terms?.message} />
           </div>
 
-          <Button type="submit" size="lg" className="w-full" disabled={loading}>
+          <Button type="submit" size="lg" className="w-full bg-accent-amber text-bg-base hover:bg-accent-amber/90" disabled={loading}>
             {loading && (
               <span
                 className="size-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
@@ -222,8 +229,8 @@ export function RegisterForm() {
 
         <p className="text-center text-sm text-ink-muted">
           Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-ink underline-offset-4 hover:underline">
-            Log in
+          <Link to="/login" className="font-semibold text-accent-amber underline-offset-4 hover:underline">
+            Sign in
           </Link>
         </p>
       </div>

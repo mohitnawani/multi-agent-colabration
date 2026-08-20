@@ -1,115 +1,91 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@400,500,600,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
-/* daisyUI theme set — light (console) is the default; dark (control room) is defined
-   for instrument panels and future toggle support. */
+/* daisyUI theme - Flight Deck: one theme, dark by default. The
+   instrument-panel identity IS the product; there is no light mode. */
 @plugin "daisyui" {
-  themes: light --default, dark;
+  themes: dark --default;
 }
 
-/* dark: variant follows the app's data-theme attribute (toggle-driven, not OS-only) */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Light — "the dispatcher's desk": bright work surface, signal-lamp status colors.
-   Primary is INK, not a status hue — status colors are reserved for actual state. */
-@plugin "daisyui/theme" {
-  name: "light";
-  --color-primary: #141b26;
-  --color-primary-content: #ffffff;
-  --color-secondary: #5c6675;
-  --color-secondary-content: #ffffff;
-  --color-accent: #2e5ba6;
-  --color-accent-content: #ffffff;
-  --color-base-100: #ffffff; /* sheet — cards, tables, modals */
-  --color-base-200: #eef1f5; /* console — page canvas */
-  --color-base-300: #d8dee7; /* line — hairlines, borders */
-  --color-base-content: #141b26;
-  --color-neutral: #5c6675;
-  --color-neutral-content: #ffffff;
-  --color-info: #2e5ba6;    /* idle / pending signal */
-  --color-info-content: #ffffff;
-  --color-success: #157a4b; /* succeeded signal */
-  --color-success-content: #ffffff;
-  --color-warning: #a85b00; /* running signal */
-  --color-warning-content: #ffffff;
-  --color-error: #b42318;   /* failed signal */
-  --color-error-content: #ffffff;
-  --radius-selector: 0.5rem;
-  --radius-field: 0.5rem;
-  --radius-box: 0.75rem;
-}
-
-/* Dark — the control room. Only used behind the signature schematic and for
-   future data-theme="dark" support. */
+/* Flight Deck - warm graphite-navy instrument panel. The single amber
+   accent means "live / needs you", the way runway lighting does. */
 @plugin "daisyui/theme" {
   name: "dark";
-  --color-primary: #e8ecf3;
-  --color-primary-content: #10151f;
-  --color-secondary: #93a0b3;
-  --color-secondary-content: #10151f;
-  --color-accent: #7fa6e8;
-  --color-accent-content: #10151f;
-  --color-base-100: #141928; /* card */
-  --color-base-200: #0b0e16; /* page canvas */
-  --color-base-300: #1c2333; /* hover / nested */
-  --color-base-content: #e8ecf3;
-  --color-neutral: #93a0b3;
-  --color-neutral-content: #10151f;
-  --color-info: #7fa6e8;
-  --color-info-content: #10151f;
-  --color-success: #4bbf8a;
-  --color-success-content: #10151f;
-  --color-warning: #e0a32e;
-  --color-warning-content: #10151f;
-  --color-error: #ff8a80;
-  --color-error-content: #10151f;
+  --color-primary: #e8a33d;
+  --color-primary-content: #10141c;
+  --color-secondary: #8a93a6;
+  --color-secondary-content: #10141c;
+  --color-accent: #e8a33d;
+  --color-accent-content: #10141c;
+  --color-base-100: #171c26; /* panel - cards, sheets, modals */
+  --color-base-200: #10141c; /* canvas - page background */
+  --color-base-300: #262c38; /* hairline - 1px borders */
+  --color-base-content: #edeef0;
+  --color-neutral: #8a93a6;
+  --color-neutral-content: #10141c;
+  --color-info: #8a93a6;
+  --color-info-content: #10141c;
+  --color-success: #4fbf9f;
+  --color-success-content: #10141c;
+  --color-warning: #e8a33d;
+  --color-warning-content: #10141c;
+  --color-error: #e5533d;
+  --color-error-content: #10141c;
   --radius-selector: 0.5rem;
   --radius-field: 0.5rem;
-  --radius-box: 0.75rem;
+  --radius-box: 0.5rem;
 }
 
-/* Design tokens (Tailwind v4 @theme) — every color, face and scale the UI uses */
+/* Design tokens (Tailwind v4 @theme) - the Flight Deck token table */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Clash Display", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Palette */
-  --color-ink: #141b26;
-  --color-ink-muted: #5c6675;
-  --color-console: #eef1f5;
-  --color-sheet: #ffffff;
-  --color-line: #d8dee7;
+  /* Core palette - every color traces to the token table */
+  --color-bg-base: #10141c;
+  --color-bg-panel: #171c26;
+  --color-bg-panel-raised: #1e2430;
+  --color-border: #262c38;
+  --color-text-primary: #edeef0;
+  --color-text-secondary: #8a93a6;
+  --color-accent-amber: #e8a33d;
+  --color-accent-amber-dim: #4a3a1f;
+  --color-status-online: #4fbf9f;
+  --color-status-error: #e5533d;
+  --color-status-pending: #8a93a6;
 
-  /* Signal lamps — every hue names an orchestration state.
-     Blue is NOT a status: it is reserved for interactive/navigation (accent). */
-  --color-lamp-idle: #64748b; /* pending — neutral slate */
-  --color-lamp-running: #a85b00;
-  --color-lamp-done: #157a4b;
-  --color-lamp-failed: #b42318;
-  --color-lamp-review: #6d4ac4;
+  /* Utility names - remapped so existing ink/console/sheet/line usage
+     follows the token table exactly */
+  --color-ink: #edeef0;
+  --color-ink-muted: #8a93a6;
+  --color-console: #1e2430;
+  --color-sheet: #171c26;
+  --color-line: #262c38;
 
-  /* Module identity — the app's triad: Teams violet, Agents teal, Tasks green */
-  --color-mod-teams: #6d4ac4;
-  --color-mod-agents: #0f766e;
-  --color-mod-tasks: #157a4b;
+  /* Signal lamps - status vocabulary (Online/Running/Passed/Failed) */
+  --color-lamp-idle: #8a93a6;
+  --color-lamp-running: #e8a33d;
+  --color-lamp-done: #4fbf9f;
+  --color-lamp-failed: #e5533d;
+  --color-lamp-review: #e8a33d;
 
-  /* Control room — dark instrument panel (signature only) */
-  --color-panel: #10151f;
-  --color-panel-2: #171e2b;
-  --color-panel-line: #232c3d;
-  --color-panel-text: #e8ecf3;
-  --color-panel-muted: #93a0b3;
+  /* Module identity - Teams, Agents, Tasks (dark-tuned, non-status hues) */
+  --color-mod-teams: #b9a3f2;
+  --color-mod-agents: #5fd0c7;
+  --color-mod-tasks: #7fd4ab;
 
-  /* Role identity hues (light) */
-  --color-role-blue: #2e5ba6;
-  --color-role-green: #157a4b;
-  --color-role-slate: #5c6675;
-  --color-role-violet: #6d4ac4;
-  --color-role-teal: #0f766e;
-  --color-role-rose: #be3a6b;
+  /* Control room panel register */
+  --color-panel: #10141c;
+  --color-panel-2: #171c26;
+  --color-panel-line: #262c38;
+  --color-panel-text: #edeef0;
+  --color-panel-muted: #8a93a6;
 
-  /* Role identity hues (dark) */
+  /* Role identity hues (dark field) */
   --color-role-blue-dark: #9db9e8;
   --color-role-green-dark: #7fd4ab;
   --color-role-slate-dark: #b6c0cf;
@@ -117,24 +93,23 @@
   --color-role-teal-dark: #5fd0c7;
   --color-role-rose-dark: #f09bb6;
 
-  /* Type scale */
+  /* Type scale - 12 / 14 / 16 / 20 / 28 / 40 */
   --text-xs: 0.75rem;
-  --text-xs--line-height: 1.3;
+  --text-xs--line-height: 1.4;
   --text-sm: 0.875rem;
-  --text-sm--line-height: 1.45;
+  --text-sm--line-height: 1.6;
   --text-base: 1rem;
   --text-base--line-height: 1.5;
-  --text-lg: 1.125rem;
-  --text-lg--line-height: 1.4;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.35;
   --text-xl: 1.25rem;
   --text-xl--line-height: 1.35;
-  --text-2xl: 1.5rem;
+  --text-2xl: 1.75rem;
   --text-2xl--line-height: 1.25;
-  --text-3xl: 1.875rem;
+  --text-3xl: 2.25rem;
   --text-3xl--line-height: 1.2;
-  --text-4xl: 2.25rem;
+  --text-4xl: 2.5rem;
   --text-4xl--line-height: 1.15;
-
 }
 
 /* Stacking scale (v4 has no --z-* theme namespace) */
@@ -156,7 +131,7 @@
     @apply bg-base-200 text-base-content font-sans antialiased;
   }
 
-  /* AI/tech pairing: Space Grotesk for headings, Inter for UI text */
+  /* Clash Display for headings - large sizes only, tight tracking */
   h1,
   h2,
   h3,
@@ -164,75 +139,45 @@
   h5,
   h6 {
     font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
 
-  /* Dark theme — remap the console tokens onto the control-room register so every
-     text-ink / bg-console / ring-line utility adapts without per-component work. */
-  [data-theme="dark"] {
-    --color-ink: var(--color-panel-text);
-    --color-ink-muted: var(--color-panel-muted);
-    --color-console: var(--color-panel);
-    --color-sheet: var(--color-panel-2);
-    --color-line: var(--color-panel-line);
-    /* Brighter lamp variants for the dark field */
-    --color-lamp-idle: #8ea0b5;
-    --color-lamp-running: #e0a32e;
-    --color-lamp-done: #4bbf8a;
-    --color-lamp-failed: #ff8a80;
-    --color-lamp-review: #b9a3f2;
-    /* Module triad — lifted for dark */
-    --color-mod-teams: #b9a3f2;
-    --color-mod-agents: #5fd0c7;
-    --color-mod-tasks: #7fd4ab;
-  }
-
-  /* Keep the control-room panel a step darker than the dark canvas */
-  [data-theme="dark"] .panel {
-    --panel: #0b0e16;
-    --panel-2: #141928;
-    --panel-line: #1c2333;
-    --panel-text: #e8ecf3;
-    --panel-muted: #93a0b3;
-  }
-
-  /* Selection + caret from the palette */
   ::selection {
-    background: color-mix(in srgb, var(--color-ink) 14%, transparent);
+    background: color-mix(in srgb, var(--color-accent-amber) 30%, transparent);
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: var(--color-line) transparent;
+    scrollbar-color: var(--color-border) transparent;
   }
   *::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   *::-webkit-scrollbar-thumb {
-    background: var(--color-line);
+    background: var(--color-border);
     border-radius: 999px;
-    border: 3px solid var(--color-console);
+    border: 3px solid var(--color-bg-base);
   }
 
-  /* Visible, consistent keyboard focus — accent is the interactive color */
+  /* Visible keyboard focus - amber, the interactive color */
   :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 2px solid var(--color-accent-amber);
     outline-offset: 2px;
   }
 }
 
 @layer components {
-  /* Elevated sheet: cards, tables, modals */
+  /* Elevated sheet: cards, tables, modals - depth from color step, no shadows */
   .surface {
     @apply bg-base-100 border border-base-300 rounded-box;
   }
 
-  /* Calm page-load fade for app screens */
   .page-enter {
     animation: page-enter 0.22s ease-out both;
   }
 
-  /* Mono data layer — model names, temps, ids, dates, numbers */
+  /* Mono data layer - ids, logs, timestamps, status codes */
   .tabular {
     font-variant-numeric: tabular-nums;
   }
@@ -255,29 +200,29 @@
   .lamp-review { background: var(--color-lamp-review); }
 
   .status-pill {
-    @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
+    @apply inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
   }
-  .status-pill-idle { color: var(--color-lamp-idle); background: color-mix(in srgb, var(--color-lamp-idle) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-idle) 22%, transparent); }
-  .status-pill-running { color: var(--color-lamp-running); background: color-mix(in srgb, var(--color-lamp-running) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-running) 22%, transparent); }
-  .status-pill-done { color: var(--color-lamp-done); background: color-mix(in srgb, var(--color-lamp-done) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-done) 22%, transparent); }
-  /* Failed carries the most weight — the state a user must notice first */
+  .status-pill-idle { color: var(--color-lamp-idle); background: color-mix(in srgb, var(--color-lamp-idle) 10%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-idle) 25%, transparent); }
+  .status-pill-running { color: var(--color-lamp-running); background: color-mix(in srgb, var(--color-lamp-running) 10%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-running) 25%, transparent); }
+  .status-pill-done { color: var(--color-lamp-done); background: color-mix(in srgb, var(--color-lamp-done) 10%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-done) 25%, transparent); }
+  /* Failed carries the most weight - the state a user must notice first */
   .status-pill-failed { color: var(--color-lamp-failed); background: color-mix(in srgb, var(--color-lamp-failed) 14%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-failed) 38%, transparent); font-weight: 700; }
-  .status-pill-review { color: var(--color-lamp-review); background: color-mix(in srgb, var(--color-lamp-review) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-review) 22%, transparent); }
+  .status-pill-review { color: var(--color-lamp-review); background: color-mix(in srgb, var(--color-lamp-review) 10%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-lamp-review) 25%, transparent); }
 
-  /* Legend chips — sit on the dark canvas art in both themes, so the values are fixed */
+  /* Legend chips - fixed values on the dark canvas */
   .legend-chip {
     @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset;
   }
   .legend-chip .lamp {
     background: currentColor;
   }
-  .legend-idle { color: #8ea0b5; background: rgb(142 160 181 / 12%); --tw-ring-color: rgb(142 160 181 / 30%); }
-  .legend-running { color: #e0a32e; background: rgb(224 163 46 / 12%); --tw-ring-color: rgb(224 163 46 / 30%); }
-  .legend-done { color: #4bbf8a; background: rgb(75 191 138 / 12%); --tw-ring-color: rgb(75 191 138 / 30%); }
-  .legend-failed { color: #ff8a80; background: rgb(255 138 128 / 12%); --tw-ring-color: rgb(255 138 128 / 30%); }
+  .legend-idle { color: #8a93a6; background: rgb(138 147 166 / 12%); --tw-ring-color: rgb(138 147 166 / 30%); }
+  .legend-running { color: #e8a33d; background: rgb(232 163 61 / 12%); --tw-ring-color: rgb(232 163 61 / 30%); }
+  .legend-done { color: #4fbf9f; background: rgb(79 191 159 / 12%); --tw-ring-color: rgb(79 191 159 / 30%); }
+  .legend-failed { color: #e5533d; background: rgb(229 83 61 / 12%); --tw-ring-color: rgb(229 83 61 / 30%); }
 
-  /* Markdown (LLM responses) — fenced code blocks without a language tag must not
-     inherit the inline-chip styling; descendant rule outranks the utility classes */
+  /* Markdown (LLM responses) - fenced code without language tag must not
+     inherit the inline-chip styling */
   .markdown pre code {
     background: transparent;
     padding: 0;
@@ -288,24 +233,18 @@
     font-size: 0.75rem;
   }
 
-  /* Role identity chips — one hue per role family */
+  /* Role identity chips - one hue per role family */
   .role-chip {
     @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset;
   }
-  .role-researcher { color: var(--color-role-blue); background: color-mix(in srgb, var(--color-role-blue) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-blue) 22%, transparent); }
-  .role-writer { color: var(--color-role-green); background: color-mix(in srgb, var(--color-role-green) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-green) 22%, transparent); }
-  .role-analyst { color: var(--color-role-slate); background: color-mix(in srgb, var(--color-role-slate) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-slate) 22%, transparent); }
-  .role-critic { color: var(--color-role-violet); background: color-mix(in srgb, var(--color-role-violet) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-violet) 22%, transparent); }
-  .role-developer { color: var(--color-role-teal); background: color-mix(in srgb, var(--color-role-teal) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-teal) 22%, transparent); }
-  .role-designer { color: var(--color-role-rose); background: color-mix(in srgb, var(--color-role-rose) 8%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-rose) 22%, transparent); }
-  [data-theme="dark"] .role-researcher { color: var(--color-role-blue-dark); background: color-mix(in srgb, var(--color-role-blue-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-blue-dark) 30%, transparent); }
-  [data-theme="dark"] .role-writer { color: var(--color-role-green-dark); background: color-mix(in srgb, var(--color-role-green-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-green-dark) 30%, transparent); }
-  [data-theme="dark"] .role-analyst { color: var(--color-role-slate-dark); background: color-mix(in srgb, var(--color-role-slate-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-slate-dark) 30%, transparent); }
-  [data-theme="dark"] .role-critic { color: var(--color-role-violet-dark); background: color-mix(in srgb, var(--color-role-violet-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-violet-dark) 30%, transparent); }
-  [data-theme="dark"] .role-developer { color: var(--color-role-teal-dark); background: color-mix(in srgb, var(--color-role-teal-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-teal-dark) 30%, transparent); }
-  [data-theme="dark"] .role-designer { color: var(--color-role-rose-dark); background: color-mix(in srgb, var(--color-role-rose-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-rose-dark) 30%, transparent); }
+  .role-researcher { color: var(--color-role-blue-dark); background: color-mix(in srgb, var(--color-role-blue-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-blue-dark) 30%, transparent); }
+  .role-writer { color: var(--color-role-green-dark); background: color-mix(in srgb, var(--color-role-green-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-green-dark) 30%, transparent); }
+  .role-analyst { color: var(--color-role-slate-dark); background: color-mix(in srgb, var(--color-role-slate-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-slate-dark) 30%, transparent); }
+  .role-critic { color: var(--color-role-violet-dark); background: color-mix(in srgb, var(--color-role-violet-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-violet-dark) 30%, transparent); }
+  .role-developer { color: var(--color-role-teal-dark); background: color-mix(in srgb, var(--color-role-teal-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-teal-dark) 30%, transparent); }
+  .role-designer { color: var(--color-role-rose-dark); background: color-mix(in srgb, var(--color-role-rose-dark) 12%, transparent); --tw-ring-color: color-mix(in srgb, var(--color-role-rose-dark) 30%, transparent); }
 
-  /* Tool tags — data in the mono layer */
+  /* Tool tags - data in the mono layer */
   .tool-tag {
     @apply inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[11px] font-medium;
     color: var(--color-ink-muted);
@@ -336,58 +275,40 @@
   }
 }
 
-/* ---------- Control room (dark instrument panel) ---------- */
-.panel {
-  --panel: #10151f;
-  --panel-2: #171e2b;
-  --panel-line: #232c3d;
-  --panel-text: #e8ecf3;
-  --panel-muted: #93a0b3;
-  --lamp-idle: #7fa6e8;
-  --lamp-running: #e0a32e;
-  --lamp-done: #4bbf8a;
-  --lamp-failed: #ff8a80;
-  --lamp-review: #b9a3f2;
-  background: var(--panel);
-  color: var(--panel-text);
+/* ---------- Delegation trail ---------- */
+/* One orchestrated moment: nodes light up in sequence (150ms stagger) on
+   mount, mirroring supervisor -> agents -> gate -> synthesis. Everywhere
+   else: restraint, 120ms ease-out hovers, reduced-motion respected. */
+.trail-node {
+  transition:
+    background-color 0.12s ease-out,
+    border-color 0.12s ease-out,
+    color 0.12s ease-out;
+}
+.trail-node--lit {
+  animation: trail-lit 0.4s ease-out both;
+}
+.trail-node--active {
+  animation: trail-active 1.8s ease-in-out infinite;
+}
+.trail-node--gate {
+  transform: rotate(45deg);
+}
+.trail-node--gate .trail-node__glyph {
+  transform: rotate(-45deg);
+}
+.trail-line {
+  transition: background-color 0.12s ease-out;
 }
 
-/* ---------- Auth canvas (slanted art panel) ---------- */
-/* Right edge: tilted toward the right at top, receding left at the bottom,
-   with the slant line bending toward the right (control points > 100%). */
-.auth-slant {
-  clip-path: path("M 100% 0 C 104.5% 42%, 99% 62%, 88% 100% L 0 100% L 0 0 Z");
+@keyframes trail-lit {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-
-/* Auth page background — same slant echoed as faint diagonal lines */
-.auth-bg {
-  background-color: var(--color-console);
-  background-image: repeating-linear-gradient(
-    104deg,
-    transparent 0 4rem,
-    color-mix(in srgb, var(--color-ink) 4%, transparent) 4rem 4.15rem
-  );
+@keyframes trail-active {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-amber) 0%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent-amber) 18%, transparent); }
 }
-
-/* ---------- Route schematic (signature) ---------- */
-.schematic-node {
-  transform-box: fill-box;
-  transform-origin: center;
-}
-.schematic-active {
-  animation: node-breathe 2.2s ease-in-out infinite;
-}
-.schematic-halo {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: node-halo 1.8s ease-out infinite;
-}
-.schematic-track-flow {
-  stroke-dasharray: 4 8;
-  animation: track-flow 2s linear infinite;
-}
-
-/* ---------- Motion ---------- */
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -395,17 +316,6 @@
 @keyframes lamp-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
-}
-@keyframes node-breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.04); }
-}
-@keyframes node-halo {
-  0% { opacity: 0.5; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1.9); }
-}
-@keyframes track-flow {
-  to { stroke-dashoffset: -24; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -417,7 +327,8 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
-  .lamp-running {
+  .lamp-running,
+  .trail-node--active {
     animation: none;
     opacity: 1;
   }

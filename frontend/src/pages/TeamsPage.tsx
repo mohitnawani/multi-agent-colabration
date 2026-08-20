@@ -3,16 +3,13 @@ import { useDispatch, useSelector } from 'react-redux'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link } from 'react-router'
 import { listTeams, createTeam, deleteTeam } from '../features/teams/teamsSlice'
 import { listAgents } from '../features/agents/agentsSlice'
 import type { RootState, AppDispatch } from '../store'
-import { AppNavbar } from '../components/AppNavbar'
-import { PageHeader } from '../components/PageHeader'
+import { AppShell } from '../components/AppShell'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AgentAvatar } from '../components/AgentAvatar'
 import { RoleBadge } from '../components/RoleBadge'
-import { TableSkeleton } from '../components/Skeleton'
 import { Modal } from '../components/ui/modal'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
@@ -31,17 +28,38 @@ const createTeamSchema = z.object({
 
 type CreateTeamFormData = z.infer<typeof createTeamSchema>
 
-const PATTERN_LABELS: Record<string, string> = {
-  sequential: 'Sequential — assembly line, one after another',
-  parallel: 'Parallel — all agents work simultaneously, then synthesis',
-  debate: 'Debate — agents argue for/against, judge picks winner',
-  supervisor: 'Supervisor — lead agent coordinates workers',
+const PATTERN_META: Record<string, { label: string; blurb: string; chip: string }> = {
+  sequential: {
+    label: 'Sequential',
+    blurb: 'Assembly line: each agent hands its answer to the next.',
+    chip: 'bg-console text-text-secondary',
+  },
+  parallel: {
+    label: 'Parallel',
+    blurb: 'All agents work the same task at once, then synthesis merges.',
+    chip: 'bg-console text-text-secondary',
+  },
+  debate: {
+    label: 'Debate',
+    blurb: 'Agents argue for and against, then a judge picks the winner.',
+    chip: 'bg-console text-text-secondary',
+  },
+  supervisor: {
+    label: 'Supervisor',
+    blurb: 'A lead agent coordinates workers and runs a quality gate.',
+    chip: 'bg-console text-text-secondary',
+  },
 }
+
+const PATTERN_ORDER = ['supervisor', 'sequential', 'parallel', 'debate']
+
+type Tab = 'all' | 'mine' | 'templates'
 
 export default function TeamsPage() {
   const dispatch = useDispatch<AppDispatch>()
   const { teams, loading: teamsLoading, error: teamsError } = useSelector((state: RootState) => state.teams)
   const { agents, loading: agentsLoading } = useSelector((state: RootState) => state.agents)
+  const [tab, setTab] = useState<Tab>('all')
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deletingName, setDeletingName] = useState('')
@@ -75,7 +93,7 @@ export default function TeamsPage() {
       setShowCreateModal(false)
       notify.success('Team created')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't create the team — ${err}` : "Couldn't create the team")
+      notify.error(typeof err === 'string' ? `Couldn't create the team - ${err}` : "Couldn't create the team")
     } finally {
       setSubmitting(false)
     }
@@ -92,125 +110,169 @@ export default function TeamsPage() {
       await dispatch(deleteTeam(id)).unwrap()
       notify.success('Team deleted')
     } catch (err) {
-      notify.error(typeof err === 'string' ? `Couldn't delete the team — ${err}` : "Couldn't delete the team")
+      notify.error(typeof err === 'string' ? `Couldn't delete the team - ${err}` : "Couldn't delete the team")
     } finally {
       setDeleting(false)
       setDeletingId(null)
     }
   }
 
-  const getAgentNames = (agentIds: string[]) => {
-    return agentIds
-      .map((id) => agents.find((a) => a.id === id)?.name)
-      .filter(Boolean)
-      .join(', ') || 'No agents assigned'
-  }
-
-  const isSubmitting = teamsLoading || agentsLoading
-  const openCreate = () => {
-    reset({ name: '', pattern: 'sequential', agent_ids: [] })
+  const openCreate = (pattern: string = 'sequential') => {
+    reset({ name: '', pattern: pattern as CreateTeamFormData['pattern'], agent_ids: [] })
     setShowCreateModal(true)
   }
 
+  const memberNames = (agentIds: string[]) =>
+    agentIds
+      .map((id) => agents.find((a) => a.id === id)?.name)
+      .filter((n): n is string => Boolean(n))
+
+  const isSubmitting = teamsLoading || agentsLoading
+
+  const TABS: { id: Tab; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'mine', label: 'My Teams' },
+    { id: 'templates', label: 'Templates' },
+  ]
+
   return (
-    <div className="min-h-dvh bg-base-200">
-      <AppNavbar active="teams" />
+    <AppShell active="teams">
+      <header className="mb-7">
+        <h1 className="font-display text-[28px] font-semibold tracking-tight text-text-primary">
+          Teams
+        </h1>
+        <p className="mt-1.5 text-sm text-text-secondary text-pretty">
+          Group agents into collaboration patterns, then run tasks against them.
+        </p>
+      </header>
 
-      <main className="px-4 py-8 sm:px-6">
-        <div className="mx-auto max-w-6xl page-enter">
-          <PageHeader
-            title="Teams"
-            subtitle="Group agents into collaboration patterns, then run tasks against them."
-            actions={
-              <Button onClick={openCreate} disabled={agents.length === 0} title={agents.length === 0 ? 'Create agents first' : undefined}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                Create Team
+      {/* Tab bar - amber underline on the active tab, nothing else changes color */}
+      <div role="tablist" aria-label="Team views" className="mb-6 flex gap-1 border-b border-border">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'relative -mb-px rounded-t-[8px] px-4 py-2.5 text-sm font-semibold transition-colors duration-150',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-amber',
+              tab === t.id ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
+            )}
+          >
+            {t.label}
+            {tab === t.id && (
+              <span aria-hidden="true" className="absolute inset-x-0 -bottom-px h-0.5 bg-accent-amber" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {teamsError && (
+        <div className="mb-6 flex items-start gap-2.5 rounded-[8px] bg-status-error/10 px-4 py-3 text-sm text-status-error ring-1 ring-inset ring-status-error/25" role="alert">
+          {teamsError}
+        </div>
+      )}
+
+      {tab === 'templates' ? (
+        <TemplateGrid onUse={openCreate} disabled={agents.length === 0} />
+      ) : isSubmitting && teams.length === 0 ? (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-label="Loading teams">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="surface h-40 p-5" />
+          ))}
+        </div>
+      ) : teams.length === 0 ? (
+        <div className="surface">
+          {agents.length === 0 ? (
+            <EmptyState
+              title="Teams are built from agents"
+              tint="bg-mod-teams/10 text-mod-teams ring-mod-teams/25"
+              flow="teams"
+              description="Create a researcher or a critic first - then assemble agents into a team under a collaboration pattern. Start on the Agents page."
+            >
+              <Button variant="outline" onClick={() => (window.location.href = '/agents')}>
+                Go to Agents
               </Button>
-            }
-          />
-
-          {teamsError && (
-            <div className="mb-6 flex items-start gap-2.5 rounded-field bg-lamp-failed/10 px-4 py-3 text-sm text-lamp-failed ring-1 ring-inset ring-lamp-failed/25" role="alert">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-              {teamsError}
-            </div>
-          )}
-
-          {isSubmitting && teams.length === 0 && !teamsError ? (
-            <TableSkeleton rows={3} cols={4} />
-          ) : teams.length === 0 ? (
-            <div className="surface">
-              {agents.length === 0 ? (
-                <EmptyState
-                  title="Teams are built from agents"
-                  tint="bg-mod-teams/10 text-mod-teams ring-mod-teams/25"
-                  flow="teams"
-                  description={
-                    <>
-                      Create a researcher or a critic first — then assemble agents into a team
-                      under a collaboration pattern. Start on the{' '}
-                      <Link to="/agents" className="font-semibold text-ink underline underline-offset-4">Agents</Link> page.
-                    </>
-                  }
-                >
-                  <Link to="/agents">
-                    <Button>Create Agent</Button>
-                  </Link>
-                </EmptyState>
-              ) : (
-                <EmptyState
-                  title="No teams yet"
-                  tint="bg-mod-teams/10 text-mod-teams ring-mod-teams/25"
-                  flow="teams"
-                  description="Pick a collaboration pattern and choose which agents work together. A task runs against a team, not a single agent."
-                >
-                  <Button onClick={openCreate}>Create Team</Button>
-                </EmptyState>
-              )}
-            </div>
+            </EmptyState>
           ) : (
-            <div className="surface overflow-x-auto">
-              <table className="table w-full">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Pattern</th>
-                    <th>Agents</th>
-                    <th className="text-right">Created</th>
-                    <th className="w-20 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {teams.map((team) => (
-                    <tr key={team.id} className="transition-colors hover:bg-console/70">
-                      <td className="font-semibold text-ink">{team.name}</td>
-                      <td>
-                        <span className="inline-flex items-center rounded-full bg-ink/5 px-2 py-0.5 text-xs font-semibold text-ink-muted ring-1 ring-inset ring-line" title={PATTERN_LABELS[team.pattern || 'sequential']}>
-                          {team.pattern || 'sequential'}
-                        </span>
-                      </td>
-                      <td className="max-w-xs truncate text-ink-muted">{getAgentNames(team.agent_ids)}</td>
-                      <td className="font-mono text-xs text-ink-muted/80 tabular text-right">
-                        {new Date(team.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="text-right">
-                        <button
-                          onClick={() => handleDelete(team)}
-                          className="grid size-8 place-items-center rounded-field text-ink-muted transition-colors hover:bg-lamp-failed/10 hover:text-lamp-failed"
-                          aria-label={`Delete team ${team.name}`}
-                          title="Delete team"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <EmptyState
+              title="No teams yet"
+              tint="bg-mod-teams/10 text-mod-teams ring-mod-teams/25"
+              flow="teams"
+              description="Pick a collaboration pattern and choose which agents work together. A task runs against a team, not a single agent."
+            >
+              <Button onClick={() => openCreate()}>Create Team</Button>
+            </EmptyState>
           )}
         </div>
-      </main>
+      ) : (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {teams.map((team) => {
+            const names = memberNames(team.agent_ids)
+            const meta = PATTERN_META[team.pattern || 'sequential'] || PATTERN_META.sequential
+            return (
+              <article key={team.id} className="surface flex flex-col p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex -space-x-1.5">
+                    {names.slice(0, 4).map((name) => (
+                      <AgentAvatar key={name} name={name} className="size-8 text-[10px] ring-2 ring-bg-base" />
+                    ))}
+                    {names.length > 4 && (
+                      <span className="grid size-8 place-items-center rounded-lg bg-console text-[10px] font-semibold text-text-secondary ring-2 ring-bg-base">
+                        +{names.length - 4}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleDelete(team)}
+                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-text-secondary transition-colors duration-150 hover:bg-status-error/10 hover:text-status-error"
+                    aria-label={`Delete team ${team.name}`}
+                    title="Delete team"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                  </button>
+                </div>
+
+                <h3 className="mt-3 truncate text-base font-semibold tracking-tight text-text-primary">
+                  {team.name}
+                </h3>
+                <span className={cn('mt-1.5 inline-flex w-fit items-center rounded-[4px] px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] ring-1 ring-inset ring-border', meta.chip)}>
+                  {team.pattern || 'sequential'}
+                </span>
+                <p className="mt-2 text-sm text-text-secondary text-pretty">{meta.blurb}</p>
+
+                <div className="mt-auto flex items-center justify-between border-t border-border pt-3">
+                  <span className="font-mono text-[10px] text-text-secondary tabular">
+                    {new Date(team.created_at).toLocaleDateString()}
+                  </span>
+                  <span className="flex items-center gap-1.5 font-mono text-[10px] text-text-secondary">
+                    <span className="lamp lamp-done" aria-hidden="true" />
+                    {names.length} agents
+                  </span>
+                </div>
+              </article>
+            )
+          })}
+
+          {/* Create custom team - dashed card, not a floating action button */}
+          <button
+            type="button"
+            onClick={() => openCreate()}
+            disabled={agents.length === 0}
+            title={agents.length === 0 ? 'Create agents first' : undefined}
+            className="grid min-h-[200px] place-items-center rounded-[8px] border border-dashed border-border text-center transition-colors duration-150 hover:border-accent-amber/60 hover:bg-console disabled:opacity-45"
+          >
+            <span className="px-6">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mx-auto text-accent-amber"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              <span className="mt-2 block text-sm font-semibold text-text-primary">Create custom team</span>
+              <span className="mt-1 block text-xs text-text-secondary">
+                {agents.length === 0 ? 'Create agents first' : 'Pick agents and a pattern'}
+              </span>
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Create team */}
       <Modal
@@ -226,7 +288,7 @@ export default function TeamsPage() {
               form="create-team-form"
               disabled={submitting || agents.length === 0}
             >
-              {submitting ? 'Creating…' : 'Create team'}
+              {submitting ? 'Creating\u2026' : 'Create team'}
             </Button>
           </>
         }
@@ -261,13 +323,12 @@ export default function TeamsPage() {
               )}
               {...register('pattern')}
             >
-              <option value="sequential">Sequential</option>
-              <option value="parallel">Parallel</option>
-              <option value="debate">Debate</option>
-              <option value="supervisor">Supervisor</option>
+              {PATTERN_ORDER.map((p) => (
+                <option key={p} value={p}>{PATTERN_META[p].label}</option>
+              ))}
             </select>
             <p className="mt-1.5 text-xs text-ink-muted">
-              {PATTERN_LABELS[watch('pattern') || 'sequential']}
+              {PATTERN_META[watch('pattern') || 'sequential']?.blurb}
             </p>
           </div>
 
@@ -277,7 +338,7 @@ export default function TeamsPage() {
             </p>
             {agents.length === 0 ? (
               <p className="text-sm text-ink-muted">
-                Create agents first on the <Link to="/agents" className="font-semibold text-ink underline underline-offset-4">Agents</Link> page.
+                Create agents first on the Agents page.
               </p>
             ) : (
               <div className="max-h-56 space-y-0.5 overflow-y-auto rounded-field border border-line p-1.5">
@@ -334,6 +395,46 @@ export default function TeamsPage() {
         onConfirm={() => deletingId && confirmDelete(deletingId)}
         onClose={() => !deleting && setDeletingId(null)}
       />
+    </AppShell>
+  )
+}
+
+function TemplateGrid({ onUse, disabled }: { onUse: (pattern: string) => void; disabled: boolean }) {
+  const notify = useNotify()
+
+  const applyTemplate = (pattern: string) => {
+    if (disabled) return
+    notify.success(`${PATTERN_META[pattern].label} template selected`)
+    onUse(pattern)
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+      {PATTERN_ORDER.map((p) => {
+        const meta = PATTERN_META[p]
+        return (
+          <article key={p} className="surface flex flex-col p-5">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-[4px] bg-accent-amber-dim px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-accent-amber ring-1 ring-inset ring-accent-amber/25">
+              Template
+            </span>
+            <h3 className="mt-3 text-base font-semibold tracking-tight text-text-primary">
+              {meta.label} team
+            </h3>
+            <p className="mt-1.5 text-sm text-text-secondary text-pretty">{meta.blurb}</p>
+            <div className="mt-auto pt-4">
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={disabled}
+                title={disabled ? 'Create agents first' : undefined}
+                onClick={() => applyTemplate(p)}
+              >
+                Use template
+              </Button>
+            </div>
+          </article>
+        )
+      })}
     </div>
   )
 }

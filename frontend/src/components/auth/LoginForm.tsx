@@ -47,19 +47,25 @@ export function LoginForm() {
     dispatch(login({ email: data.email, password: data.password }))
   }
 
+  // Copy rule: errors say what happened and how to fix it, in the system's voice.
+  const errorMessage =
+    error === 'invalid email or password'
+      ? 'That email and password don\u2019t match. Double-check both and try again.'
+      : error || null
+
   return (
     <div className="mx-auto w-full max-w-[400px] px-6 py-10 sm:px-10">
       <h1 className="text-2xl font-semibold tracking-tight text-ink">Welcome back</h1>
       <p className="mt-1.5 text-sm text-ink-muted">Sign in to manage your agent teams</p>
 
       <div className="mt-6 space-y-5">
-        {error && (
+        {errorMessage && (
           <div
-            className="flex items-start gap-2.5 rounded-field bg-lamp-failed/10 px-4 py-3 text-sm text-lamp-failed ring-1 ring-inset ring-lamp-failed/25"
+            className="flex items-start gap-2.5 rounded-field bg-status-error/10 px-4 py-3 text-sm text-status-error ring-1 ring-inset ring-status-error/25"
             role="alert"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="mt-0.5 shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-            {error}
+            {errorMessage}
           </div>
         )}
 
@@ -120,21 +126,21 @@ export function LoginForm() {
             </Link>
           </div>
 
-          <Button type="submit" size="lg" className="w-full" disabled={loading}>
+          <Button type="submit" size="lg" className="w-full bg-accent-amber text-bg-base hover:bg-accent-amber/90" disabled={loading}>
             {loading && (
               <span
                 className="size-3.5 animate-spin rounded-full border-[1.5px] border-current border-t-transparent"
                 aria-hidden="true"
               />
             )}
-            {loading ? 'Logging in…' : 'Log in'}
+            {loading ? 'Signing in\u2026' : 'Sign in'}
           </Button>
         </form>
 
         <p className="text-center text-sm text-ink-muted">
-          Don't have an account?{' '}
-          <Link to="/register" className="font-semibold text-ink underline-offset-4 hover:underline">
-            Sign up
+          New to NEXUS?{' '}
+          <Link to="/register" className="font-semibold text-accent-amber underline-offset-4 hover:underline">
+            Create an account
           </Link>
         </p>
       </div>

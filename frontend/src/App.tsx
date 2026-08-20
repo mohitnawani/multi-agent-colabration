@@ -12,6 +12,7 @@ import DashboardPage from './pages/DashboardPage'
 import TeamsPage from './pages/TeamsPage'
 import AgentsPage from './pages/AgentsPage'
 import TasksPage from './pages/TasksPage'
+import TaskDetailPage from './pages/TaskDetailPage'
 import { Toaster } from './components/ui/toast'
 import './index.css'
 
@@ -78,6 +79,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <TasksPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tasks/:taskId"
+        element={
+          <ProtectedRoute>
+            <TaskDetailPage />
           </ProtectedRoute>
         }
       />
