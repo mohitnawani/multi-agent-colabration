@@ -15,20 +15,24 @@ from app.services.auth.security import create_access_token, decode_access_token,
 router = APIRouter()
 
 
-def _set_auth_cookie(response: Response, token: str) -> None:
+def _set_auth_cookie(request: Request, response: Response, token: str) -> None:
+    secure = settings.cookie_secure
+    forwarded = request.headers.get("x-forwarded-proto", "")
+    if not secure and (forwarded.lower() == "https" or request.url.scheme == "https"):
+        secure = True
     response.set_cookie(
         key=COOKIE_NAME,
         value=token,
         httponly=True,
         samesite="none",
-        secure=settings.cookie_secure,
+        secure=secure,
         max_age=60 * 60 * 24 * 7,
         path="/",
     )
 
 
 @router.post("/auth/register", status_code=201)
-def register(payload: UserRegister, response: Response, db: Session = Depends(get_db)):
+def register(payload: UserRegister, request: Request, response: Response, db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.email == payload.email).first()
     if existing:
         raise HTTPException(status_code=409, detail="email already registered")
@@ -43,18 +47,18 @@ def register(payload: UserRegister, response: Response, db: Session = Depends(ge
     db.refresh(user)
 
     token, _, _ = create_access_token(user.id)
-    _set_auth_cookie(response, token)
+    _set_auth_cookie(request, response, token)
     return {"message": "registered", "user": UserOut.model_validate(user)}
 
 
 @router.post("/auth/login")
-def login(payload: UserLogin, response: Response, db: Session = Depends(get_db)):
+def login(payload: UserLogin, request: Request, response: Response, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
     if user is None or not verify_password(payload.password, user.password_hash):
         raise HTTPException(status_code=401, detail="invalid email or password")
 
     token, _, _ = create_access_token(user.id)
-    _set_auth_cookie(response, token)
+    _set_auth_cookie(request, response, token)
     return {"message": "logged in", "user": UserOut.model_validate(user)}
 
 
