@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router'
 import { Provider } from 'react-redux'
 import { store } from './store'
 import { checkAuth } from './features/auth/authSlice'
@@ -17,7 +17,9 @@ import './index.css'
 
 function AppRoutes() {
   const dispatch = useDispatch<AppDispatch>()
+  const location = useLocation()
   const { user, checked } = useSelector((state: RootState) => state.auth)
+  const from = (location.state as { from?: string } | null)?.from
 
   useEffect(() => {
     if (!checked) {
@@ -27,8 +29,26 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-      <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <RegisterPage />} />
+      <Route
+        path="/login"
+        element={
+          user ? (
+            <Navigate to={from && !['/login', '/register'].includes(from) ? from : '/dashboard'} replace />
+          ) : (
+            <LoginPage />
+          )
+        }
+      />
+      <Route
+        path="/register"
+        element={
+          user ? (
+            <Navigate to={from && !['/login', '/register'].includes(from) ? from : '/dashboard'} replace />
+          ) : (
+            <RegisterPage />
+          )
+        }
+      />
       <Route
         path="/dashboard"
         element={
