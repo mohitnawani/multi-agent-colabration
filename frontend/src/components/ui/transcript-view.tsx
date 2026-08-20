@@ -4,6 +4,7 @@ import { AgentAvatar } from '../AgentAvatar'
 import { StatusBadge } from '../StatusBadge'
 import { Skeleton } from '../Skeleton'
 import { Button } from './button'
+import { CollapsiblePanel } from './collapsible-panel'
 import { MarkdownView } from './markdown'
 import { useTaskStream } from './use-task-stream'
 
@@ -154,68 +155,10 @@ export function TranscriptView({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        {/* Run route — sticky; does not scroll with the transcript body */}
-        <div className="lg:sticky lg:top-0 lg:self-start lg:max-h-[56dvh] lg:overflow-y-auto rounded-field border border-base-300 bg-console/60 p-4">
-          <p className="mb-4 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-            Run route
-          </p>
-          <ol className="space-y-0">
-            {stations.map((s, i) => {
-              const state: StationState =
-                streaming && s.id === activeStation ? 'running' : s.state
-              return (
-                <li key={s.id} className="relative flex items-start gap-3 pb-5 last:pb-0">
-                  {i < stations.length - 1 && (
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'absolute left-[3.5px] top-4 h-full w-px',
-                        state === 'done' || state === 'running'
-                          ? state === 'running'
-                            ? 'bg-lamp-running/60'
-                            : 'bg-lamp-done/40'
-                          : 'bg-base-300',
-                      )}
-                    />
-                  )}
-                  <span
-                    className={cn(
-                      'lamp mt-1',
-                      s.gate ? 'size-2.5 rotate-45 rounded-[2px]' : undefined,
-                      state === 'running' ? 'lamp-running' : LAMP_FOR[s.state],
-                    )}
-                    aria-hidden="true"
-                  />
-                  <div className="min-w-0">
-                    <p
-                      className={cn(
-                        'text-xs font-semibold',
-                        state === 'done'
-                          ? 'text-ink'
-                          : state === 'running'
-                            ? 'text-lamp-running'
-                            : state === 'failed'
-                              ? 'text-lamp-failed'
-                              : state === 'review'
-                                ? 'text-lamp-review'
-                                : 'text-ink-muted',
-                      )}
-                    >
-                      {s.label}
-                    </p>
-                    <p className="truncate font-mono text-[10px] text-ink-muted/80">
-                      {streaming && s.id === activeStation ? 'working…' : s.sub}
-                    </p>
-                  </div>
-                </li>
-              )
-            })}
-          </ol>
-        </div>
-
-        {/* Transcript body */}
-        <div className="min-w-0 space-y-5">
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Transcript body — the chat pane; flexes to fill the freed space when
+            the side panel is collapsed (min-w-0 lets it shrink). */}
+        <div className="min-w-0 flex-1 space-y-5">
           {streaming && (
             <section>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
@@ -413,6 +356,72 @@ export function TranscriptView({
             </div>
           )}
         </div>
+
+        {/* Run route — collapsible side panel; sticky so it stays put while the
+            transcript body scrolls, and collapsible so it never squeezes the chat. */}
+        <CollapsiblePanel
+          storageKey="nexus:transcript:run-route"
+          label="Run route"
+          width={280}
+        >
+          <div className="rounded-field border border-base-300 bg-console/60 p-4 lg:sticky lg:top-0 lg:max-h-[56dvh] lg:overflow-y-auto">
+            <p className="mb-4 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+              Run route
+            </p>
+            <ol className="space-y-0">
+              {stations.map((s, i) => {
+                const state: StationState =
+                  streaming && s.id === activeStation ? 'running' : s.state
+                return (
+                  <li key={s.id} className="relative flex items-start gap-3 pb-5 last:pb-0">
+                    {i < stations.length - 1 && (
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          'absolute left-[3.5px] top-4 h-full w-px',
+                          state === 'done' || state === 'running'
+                            ? state === 'running'
+                              ? 'bg-lamp-running/60'
+                              : 'bg-lamp-done/40'
+                            : 'bg-base-300',
+                        )}
+                      />
+                    )}
+                    <span
+                      className={cn(
+                        'lamp mt-1',
+                        s.gate ? 'size-2.5 rotate-45 rounded-[2px]' : undefined,
+                        state === 'running' ? 'lamp-running' : LAMP_FOR[s.state],
+                      )}
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0">
+                      <p
+                        className={cn(
+                          'text-xs font-semibold',
+                          state === 'done'
+                            ? 'text-ink'
+                            : state === 'running'
+                              ? 'text-lamp-running'
+                              : state === 'failed'
+                                ? 'text-lamp-failed'
+                                : state === 'review'
+                                  ? 'text-lamp-review'
+                                  : 'text-ink-muted',
+                        )}
+                      >
+                        {s.label}
+                      </p>
+                      <p className="truncate font-mono text-[10px] text-ink-muted/80">
+                        {streaming && s.id === activeStation ? 'working…' : s.sub}
+                      </p>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+        </CollapsiblePanel>
       </div>
     </div>
   )
